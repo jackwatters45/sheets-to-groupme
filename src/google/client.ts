@@ -1,9 +1,20 @@
 import { Data, Effect } from "effect";
 import { AppConfig } from "../config";
 
+export interface UserContact {
+  name: string;
+  email: string;
+  phone: string;
+}
+
 export class GoogleAuthError extends Data.TaggedError("GoogleAuthError")<{
   readonly message: string;
   readonly cause?: unknown;
+}> {}
+
+export class ColumnMappingError extends Data.TaggedError("ColumnMappingError")<{
+  readonly message: string;
+  readonly column: string;
 }> {}
 
 const base64UrlEncode = (data: unknown): string => {
@@ -100,3 +111,71 @@ export const fetchRows = (sheetId: string, range: string) =>
 
     return data.values ?? [];
   });
+
+export const findColumnIndices = (
+  headers: string[],
+  columnMapping: {
+    name: string;
+    email: string;
+    phone: string;
+  }
+): { nameIndex: number; emailIndex: number; phoneIndex: number } => {
+  const nameIndex = headers.findIndex(
+    (h) => h.trim().toLowerCase() === columnMapping.name.toLowerCase()
+  );
+  const emailIndex = headers.findIndex(
+    (h) => h.trim().toLowerCase() === columnMapping.email.toLowerCase()
+  );
+  const phoneIndex = headers.findIndex(
+    (h) => h.trim().toLowerCase() === columnMapping.phone.toLowerCase()
+  );
+
+  return { nameIndex, emailIndex, phoneIndex };
+};
+
+export const extractUserContacts = (
+  rows: string[][],
+  columnMapping: { nameIndex: number; emailIndex: number; phoneIndex: number }
+): UserContact[] => {
+  return rows
+    .filter((row) => row.length > 0)
+    .map((row) => ({
+      name: row[columnMapping.nameIndex]?.trim() ?? "",
+      email: row[columnMapping.emailIndex]?.trim() ?? "",
+      phone: row[columnMapping.phoneIndex]?.trim() ?? "",
+    }));
+};
+
+export const parseUserContacts = (
+  rows: readonly string[][],
+  columnMapping: {
+    name: string;
+    email: string;
+    phone: string;
+  }
+): Effect.Effect<UserContact[], ColumnMappingError> => {
+  if (rows.length === 0) {
+    return Effect.succeed([]);
+  }
+
+  const headers = rows[0];
+  const dataRows = rows.slice(1);
+
+  const { nameIndex, emailIndex, phoneIndex } = findColumnIndices(headers, columnMapping);
+
+  const missingColumns: string[] = [];
+  if (nameIndex === -1) missingColumns.push(columnMapping.name);
+  if (emailIndex === -1) missingColumns.push(columnMapping.email);
+  if (phoneIndex === -1) missingColumns.push(columnMapping.phone);
+
+  if (missingColumns.length > 0) {
+    return Effect.fail(
+      new ColumnMappingError({
+        message: `Missing required columns: ${missingColumns.join(", ")}`,
+        column: missingColumns[0],
+      })
+    );
+  }
+
+  return Effect.succeed(extractUserContacts(dataRows, { nameIndex, emailIndex, phoneIndex }));
+};

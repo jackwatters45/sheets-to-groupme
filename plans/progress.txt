@@ -93,3 +93,8 @@ Gotchas: Project uses noEmit: true for TypeScript, so Bun runs source directly w
 Summary: Created fly.toml with sfo region, shared-cpu-1x VM with 1GB memory, persistent volume mount for /app/data
 Files: fly.toml
 Gotchas: Auto-stop/start machines configured for cost efficiency, HTTP service on port 8080, Mounts section for state persistence
+
+[CI-001] COMPLETE
+Summary: Created .github/workflows/ci.yml with oven-sh/setup-bun action, runs on push to main and PRs
+Files: .github/workflows/ci.yml
+Gotchas: Installs dependencies with --frozen-lockfile for reproducible builds, Runs typecheck, format check, and biome check

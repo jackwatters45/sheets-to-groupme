@@ -240,7 +240,7 @@
     "id": "CI-001",
     "category": "ci-cd",
     "description": "GitHub Actions CI workflow",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create .github/workflows/ci.yml",
       "Run on push to main and PRs",

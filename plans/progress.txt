@@ -58,3 +58,8 @@ Gotchas: Used ReadonlyMap for processedRows to prevent mutation, Node imports mu
 Summary: Implemented row ID generation strategy using SHA256 hash of row content for stable IDs
 Files: src/state/store.ts
 Gotchas: Used crypto.subtle.digest for secure hash generation, returns 16-char truncated hash for readability
+
+[SYNC-001] COMPLETE
+Summary: Implemented main sync loop orchestration with runSync function combining Google Sheets, state management, and GroupMe
+Files: src/sync/sync.ts
+Gotchas: Used Effect.promise for async row ID generation, Arr.reduce for processing contacts sequentially with error handling

@@ -154,7 +154,7 @@
     "id": "SYNC-001",
     "category": "core",
     "description": "Main sync loop orchestration",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Fetch all rows from Google Sheet",
       "Generate row IDs for deduplication",

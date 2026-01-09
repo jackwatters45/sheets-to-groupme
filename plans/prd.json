@@ -168,7 +168,7 @@
     "id": "SYNC-002",
     "category": "core",
     "description": "Error handling and recovery",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Catch individual row processing errors",
       "Continue processing remaining rows on error",

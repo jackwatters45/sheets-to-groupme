@@ -20,8 +20,15 @@ export interface SyncResult {
   details: Array<{
     rowId: string;
     name: string;
-    status: "added" | "skipped" | "error";
+    status: "added" | "skipped" | "error" | "failed";
     error?: string;
+    timestamp?: string;
+  }>;
+  failedRows: Array<{
+    rowId: string;
+    contact: UserContact;
+    error: string;
+    timestamp: string;
   }>;
 }
 
@@ -32,7 +39,9 @@ interface ProcessingContext {
   added: number;
   skipped: number;
   errors: number;
+  failedCount: number;
   details: SyncResult["details"];
+  failedRows: SyncResult["failedRows"];
 }
 
 const processContact = (
@@ -43,24 +52,33 @@ const processContact = (
   Effect.gen(function* () {
     const row = [contact.name, contact.email || "", contact.phone || ""];
     const rowId = yield* Effect.promise(() => generateRowId(row));
+    const timestamp = new Date().toISOString();
 
     if (isDuplicateRow(rowId, context.state)) {
-      const updatedState = markRowAsProcessed(context.state, rowId, false);
-      return {
-        state: updatedState,
-        added: context.added,
-        skipped: context.skipped + 1,
-        errors: context.errors,
-        details: [
-          ...context.details,
-          {
-            rowId,
-            name: contact.name,
-            status: "skipped",
-            error: "already_processed",
-          },
-        ],
-      };
+      const existingRow = context.state.processedRows.get(rowId);
+      const wasSuccessful = existingRow?.success ?? false;
+
+      if (wasSuccessful) {
+        const updatedState = markRowAsProcessed(context.state, rowId, false);
+        return {
+          state: updatedState,
+          added: context.added,
+          skipped: context.skipped + 1,
+          errors: context.errors,
+          failedCount: context.failedCount,
+          details: [
+            ...context.details,
+            {
+              rowId,
+              name: contact.name,
+              status: "skipped",
+              error: "already_processed",
+              timestamp,
+            },
+          ],
+          failedRows: context.failedRows,
+        };
+      }
     }
 
     const member: GroupMeMember = {
@@ -69,22 +87,24 @@ const processContact = (
       phone_number: contact.phone,
     };
 
-    const result = yield* addGroupMeMember(groupId, member).pipe(
-      Effect.catchAll((_error) =>
+    const addResult = yield* addGroupMeMember(groupId, member).pipe(
+      Effect.catchAll((error) =>
         Effect.succeed({
           success: false,
           alreadyExists: false,
+          errorMessage: error.message,
         })
       )
     );
 
-    if (result.alreadyExists) {
+    if (addResult.alreadyExists) {
       const updatedState = markRowAsProcessed(context.state, rowId, false);
       return {
         state: updatedState,
         added: context.added,
         skipped: context.skipped + 1,
         errors: context.errors,
+        failedCount: context.failedCount,
         details: [
           ...context.details,
           {
@@ -92,6 +112,40 @@ const processContact = (
             name: contact.name,
             status: "skipped",
             error: "already_exists",
+            timestamp,
+          },
+        ],
+        failedRows: context.failedRows,
+      };
+    }
+
+    if (!addResult.success) {
+      const errorMessage = (addResult as { errorMessage?: string }).errorMessage ?? "Unknown error";
+      logger.error(`Failed to add member ${contact.name}: ${errorMessage}`);
+
+      return {
+        state: context.state,
+        added: context.added,
+        skipped: context.skipped,
+        errors: context.errors + 1,
+        failedCount: context.failedCount + 1,
+        details: [
+          ...context.details,
+          {
+            rowId,
+            name: contact.name,
+            status: "error",
+            error: errorMessage,
+            timestamp,
+          },
+        ],
+        failedRows: [
+          ...context.failedRows,
+          {
+            rowId,
+            contact,
+            error: errorMessage,
+            timestamp,
           },
         ],
       };
@@ -103,14 +157,17 @@ const processContact = (
       added: context.added + 1,
       skipped: context.skipped,
       errors: context.errors,
+      failedCount: context.failedCount,
       details: [
         ...context.details,
         {
           rowId,
           name: contact.name,
           status: "added",
+          timestamp,
         },
       ],
+      failedRows: context.failedRows,
     };
   });
 
@@ -139,6 +196,7 @@ export const runSync = Effect.gen(function* () {
       errors: 0,
       duration: Date.now() - startTime,
       details: [],
+      failedRows: [],
     });
   }
 
@@ -158,6 +216,7 @@ export const runSync = Effect.gen(function* () {
       errors: 0,
       duration: Date.now() - startTime,
       details: [],
+      failedRows: [],
     });
   }
 
@@ -170,7 +229,9 @@ export const runSync = Effect.gen(function* () {
     added: 0,
     skipped: 0,
     errors: 0,
+    failedCount: 0,
     details: [],
+    failedRows: [],
   };
 
   const finalContext = yield* processContacts(userContacts, initialContext, config.groupme.groupId);
@@ -188,5 +249,6 @@ export const runSync = Effect.gen(function* () {
     errors: finalContext.errors,
     duration,
     details: finalContext.details,
+    failedRows: finalContext.failedRows,
   };
 });

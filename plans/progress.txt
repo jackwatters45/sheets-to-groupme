@@ -63,3 +63,8 @@ Gotchas: Used crypto.subtle.digest for secure hash generation, returns 16-char t
 Summary: Implemented main sync loop orchestration with runSync function combining Google Sheets, state management, and GroupMe
 Files: src/sync/sync.ts
 Gotchas: Used Effect.promise for async row ID generation, Arr.reduce for processing contacts sequentially with error handling
+
+[SYNC-002] COMPLETE
+Summary: Enhanced sync loop with comprehensive error handling including failedRows tracking, error timestamps, and detailed error reporting
+Files: src/sync/sync.ts
+Gotchas: Added failedRows array to SyncResult for tracking failed rows with timestamps, error messages, and contact data for retry

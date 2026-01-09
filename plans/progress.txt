@@ -7,3 +7,8 @@ Initialized: 2026-01-10T08:05:59+11:00
 Summary: Initialized Bun + TypeScript + Effect project with package.json, tsconfig.json, biome.json, and basic main.ts entry point
 Files: package.json, tsconfig.json, biome.json, src/main.ts
 Gotchas: Effect.gen had type issues with TypeScript - simplified to Effect.sync for initial working version
+
+[STRUCT-001] COMPLETE
+Summary: Created project directory structure with all module directories (google, groupme, state, scheduler, error, core, types) and barrel exports
+Files: src/google/*, src/groupme/*, src/state/*, src/scheduler/*, src/error/*, src/core/*, src/types/*, src/index.ts
+Gotchas: Had naming conflicts between interface and const objects - renamed interfaces/types to avoid merge conflicts (e.g., GroupMeApi → GroupMeApiAddMember)

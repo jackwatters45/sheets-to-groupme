@@ -14,7 +14,7 @@
     "id": "STRUCT-001",
     "category": "setup",
     "description": "Create project directory structure",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create src/google, src/groupme, src/state, src/scheduler, src/error, src/types directories",
       "Add index.ts files with barrel exports",
@@ -246,6 +246,19 @@
       "Build Docker image",
       "Deploy to Fly.io",
       "Notify on deployment success/failure"
+    ]
+  },
+  {
+    "id": "TEST-001",
+    "category": "quality",
+    "description": "Configure testing infrastructure with @effect/vitest",
+    "passes": false,
+    "steps": [
+      "Install @effect/vitest and vitest as dev dependencies",
+      "Create vitest.config.ts with Effect runtime support",
+      "Add test script to package.json",
+      "Write sample test to verify testing works",
+      "Run bun test to confirm tests execute"
     ]
   },
   {

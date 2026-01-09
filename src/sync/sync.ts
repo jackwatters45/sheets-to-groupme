@@ -1,6 +1,6 @@
 import { Array as Arr, Effect } from "effect";
 import { AppConfig } from "../config";
-import { logger } from "../core/logger";
+import { error, info } from "../core/logger";
 import { type UserContact, fetchRows, parseUserContacts } from "../google/client";
 import { type GroupMeMember, addGroupMeMember } from "../groupme/client";
 import {
@@ -121,7 +121,7 @@ const processContact = (
 
     if (!addResult.success) {
       const errorMessage = (addResult as { errorMessage?: string }).errorMessage ?? "Unknown error";
-      logger.error(`Failed to add member ${contact.name}: ${errorMessage}`);
+      error(`Failed to add member ${contact.name}: ${errorMessage}`);
 
       return {
         state: context.state,
@@ -184,12 +184,12 @@ export const runSync = Effect.gen(function* () {
   const startTime = Date.now();
   const config = yield* AppConfig;
 
-  logger.info("Starting sync...");
+  info("Starting sync...");
 
   const rows = yield* fetchRows(config.google.sheetId, DEFAULT_RANGE);
 
   if (rows.length === 0) {
-    logger.info("No rows found in Google Sheet");
+    info("No rows found in Google Sheet");
     return yield* Effect.succeed({
       added: 0,
       skipped: 0,
@@ -209,7 +209,7 @@ export const runSync = Effect.gen(function* () {
   const userContacts = yield* parseUserContacts(rows, columnMapping);
 
   if (userContacts.length === 0) {
-    logger.info("No valid user contacts found");
+    info("No valid user contacts found");
     return yield* Effect.succeed({
       added: 0,
       skipped: 0,
@@ -220,7 +220,7 @@ export const runSync = Effect.gen(function* () {
     });
   }
 
-  logger.info(`Found ${userContacts.length} user contacts`);
+  info(`Found ${userContacts.length} user contacts`);
 
   const currentState = yield* loadState();
 
@@ -239,7 +239,7 @@ export const runSync = Effect.gen(function* () {
   yield* saveState(finalContext.state);
 
   const duration = Date.now() - startTime;
-  logger.info(
+  info(
     `Sync complete: added=${finalContext.added}, skipped=${finalContext.skipped}, errors=${finalContext.errors}, duration=${duration}ms`
   );
 

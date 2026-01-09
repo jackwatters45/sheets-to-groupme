@@ -25,7 +25,7 @@
     "id": "BIOME-001",
     "category": "quality",
     "description": "Configure Biome formatter and linter",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Install @biomejs/biome as dev dependency",
       "Create biome.json with TypeScript config",

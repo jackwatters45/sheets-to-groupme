@@ -19,7 +19,16 @@
     "declarationMap": false,
     "jsx": "react-jsx",
     "lib": ["ES2022"],
-    "types": ["bun-types"]
+    "types": ["bun-types"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "importAliases": {
+          "Array": "Arr",
+          "Function": "Fn"
+        }
+      }
+    ]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]

@@ -1,4 +1,4 @@
-import type { GroupMeMember, GroupMeApiAddMember } from "./types";
+import type { GroupMeApiAddMember, GroupMeMember } from "./types";
 
 export const addGroupMeMember: GroupMeApiAddMember = async (
   _groupId: string,

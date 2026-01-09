@@ -3,10 +3,7 @@ export interface GoogleSheetsClient {
 }
 
 export const GoogleSheetsClient = {
-  fetchRows: async (
-    _sheetId: string,
-    _range: string
-  ): Promise<readonly string[][]> => {
+  fetchRows: async (_sheetId: string, _range: string): Promise<readonly string[][]> => {
     return [];
   },
 } satisfies GoogleSheetsClient;

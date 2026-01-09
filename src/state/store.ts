@@ -1,4 +1,4 @@
-import type { SyncState, StateStore } from "./types";
+import type { StateStore, SyncState } from "./types";
 
 export const stateStore: StateStore = {
   load: async (): Promise<SyncState> => {

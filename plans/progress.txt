@@ -12,3 +12,8 @@ Gotchas: Effect.gen had type issues with TypeScript - simplified to Effect.sync 
 Summary: Created project directory structure with all module directories (google, groupme, state, scheduler, error, core, types) and barrel exports
 Files: src/google/*, src/groupme/*, src/state/*, src/scheduler/*, src/error/*, src/core/*, src/types/*, src/index.ts
 Gotchas: Had naming conflicts between interface and const objects - renamed interfaces/types to avoid merge conflicts (e.g., GroupMeApi → GroupMeApiAddMember)
+
+[BIOME-001] COMPLETE
+Summary: Configured Biome formatter and linter with biome.json, added format/check scripts to package.json
+Files: biome.json, package.json (scripts), tsconfig.json (Effect plugin)
+Gotchas: biome.json indentStyle value was "spaces" but Biome expects "space" (singular)

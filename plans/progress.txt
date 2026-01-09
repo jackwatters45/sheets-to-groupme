@@ -33,3 +33,8 @@ Gotchas: Upgraded effect from 2.4.19 to 3.19.14 for Effect.Service support, Used
 Summary: Implemented Service Account authentication with JWT bearer token flow for Google Sheets API
 Files: src/config.ts, src/google/client.ts, src/google/client.test.ts
 Gotchas: Used global Config.AppConfig with yield* for config access, Added unit and integration tests with mocked fetch, Updated AGENTS.md with Effect return type guidance
+
+[GMe-001] COMPLETE
+Summary: Implemented GroupMe API client using Effect patterns with addGroupMeMember function
+Files: src/groupme/client.ts
+Gotchas: None - followed same pattern as Google Sheets client

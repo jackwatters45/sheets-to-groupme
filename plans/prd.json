@@ -98,7 +98,7 @@
     "id": "GMe-001",
     "category": "integration",
     "description": "GroupMe API client with Effect",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create GroupMeHttpClient layer with HttpClient",
       "Implement addMember function calling POST /groups/{id}/members/add",

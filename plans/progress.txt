@@ -103,3 +103,8 @@ Gotchas: Installs dependencies with --frozen-lockfile for reproducible builds, R
 Summary: Created .github/workflows/cd.yml for automatic deployment to Fly.io on push to main
 Files: .github/workflows/cd.yml
 Gotchas: Uses docker/build-push-action with GHA cache, Deploys using flyctl with FLY_API_TOKEN secret, Triggered on push to main or manual workflow_dispatch
+
+[CRON-001] COMPLETE
+Summary: Implemented hourly cron scheduler in src/scheduler/cron.ts with runHourlySync function
+Files: src/scheduler/cron.ts, src/main.ts
+Gotchas: Handles SIGTERM/SIGINT for graceful shutdown, Logs start/end times with duration, Uses setInterval for hourly execution, Replaced one-time sync in main.ts with cron scheduler

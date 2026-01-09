@@ -204,7 +204,7 @@
     "id": "CRON-001",
     "category": "deployment",
     "description": "Hourly cron scheduler",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Run sync on hourly interval (0 * * * *)",
       "Exit cleanly after completion",

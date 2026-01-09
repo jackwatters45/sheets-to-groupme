@@ -28,3 +28,8 @@ Next: Config provider needs to be integrated with main.ts Layer
 Summary: Implemented Google Sheets API client using Effect.Service pattern with GoogleAccessToken as a dependency tag
 Files: src/google/client.ts
 Gotchas: Upgraded effect from 2.4.19 to 3.19.14 for Effect.Service support, Used laxdb as reference for Effect.Service pattern with Context.Tag for config dependencies
+
+[GSheet-002] COMPLETE
+Summary: Implemented Service Account authentication with JWT bearer token flow for Google Sheets API
+Files: src/config.ts, src/google/client.ts, src/google/client.test.ts
+Gotchas: Used global Config.AppConfig with yield* for config access, Added unit and integration tests with mocked fetch, Updated AGENTS.md with Effect return type guidance

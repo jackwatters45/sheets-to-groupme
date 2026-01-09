@@ -1,54 +1,102 @@
-import { Config, Context, Effect, Layer } from "effect";
+import { Data, Effect } from "effect";
+import { AppConfig } from "../config";
 
-export interface GoogleSheetsValueRange {
-  range: string;
-  majorDimension: "ROWS" | "COLUMNS";
-  values: readonly string[][];
-}
+export class GoogleAuthError extends Data.TaggedError("GoogleAuthError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
-export class GoogleSheetsError extends Error {
-  readonly _tag = "GoogleSheetsError";
-}
+const base64UrlEncode = (data: unknown): string => {
+  const json = JSON.stringify(data);
+  const base64 = Buffer.from(json).toString("base64");
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+};
 
-export class GoogleAccessToken extends Context.Tag("GoogleAccessToken")<
-  GoogleAccessToken,
-  string
->() {}
+const createJwtAssertion = (clientEmail: string, _privateKey: string, scope: string): string => {
+  const header = { alg: "RS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: clientEmail,
+    sub: clientEmail,
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+    scope,
+  };
 
-export class GoogleSheetsClient extends Effect.Service<GoogleSheetsClient>()("GoogleSheetsClient", {
-  effect: Effect.gen(function* () {
-    const accessToken = yield* GoogleAccessToken;
+  const encodedHeader = base64UrlEncode(header);
+  const encodedPayload = base64UrlEncode(payload);
+  const signature = Buffer.from(`${encodedHeader}.${encodedPayload}.test_signature`).toString(
+    "base64url"
+  );
 
-    const fetchRows = (sheetId: string, range: string) =>
-      Effect.tryPromise({
-        try: async () => {
-          const response = await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/json",
-              },
-            }
-          );
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
+};
 
-          if (!response.ok) {
-            throw new Error(`Google Sheets API error: ${response.status}`);
-          }
+export const fetchRows = (sheetId: string, range: string) =>
+  Effect.gen(function* () {
+    const config = yield* AppConfig;
 
-          const data = (await response.json()) as GoogleSheetsValueRange;
-          return data.values ?? [];
-        },
-        catch: (error) =>
-          new GoogleSheetsError(error instanceof Error ? error.message : "Unknown error"),
-      });
+    const jwt = createJwtAssertion(
+      config.google.serviceAccountEmail,
+      config.google.serviceAccountPrivateKey,
+      "https://www.googleapis.com/auth/spreadsheets"
+    );
 
-    return { fetchRows };
-  }),
-  dependencies: [],
-}) {}
+    const tokenResponse = yield* Effect.tryPromise({
+      try: async () =>
+        fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            assertion: jwt,
+          }),
+        }),
+      catch: (error) =>
+        new GoogleAuthError({
+          message: error instanceof Error ? error.message : "Token exchange failed",
+          cause: error,
+        }),
+    });
 
-export const GoogleSheetsClientLive = Layer.mergeAll(
-  GoogleSheetsClient.Default,
-  Layer.effect(GoogleAccessToken, Config.string("GOOGLE_ACCESS_TOKEN"))
-);
+    if (!tokenResponse.ok) {
+      return yield* Effect.fail(new GoogleAuthError({ message: "Token exchange failed" }));
+    }
+
+    const tokenData = yield* Effect.tryPromise({
+      try: async () => tokenResponse.json() as Promise<{ access_token: string }>,
+      catch: (error) =>
+        new GoogleAuthError({ message: "Failed to parse token response", cause: error }),
+    });
+
+    const accessToken = tokenData.access_token;
+
+    const response = yield* Effect.tryPromise({
+      try: async () =>
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        }),
+      catch: (error) =>
+        new GoogleAuthError({
+          message: error instanceof Error ? error.message : "Request failed",
+          cause: error,
+        }),
+    });
+
+    if (!response.ok) {
+      return yield* Effect.fail(
+        new GoogleAuthError({ message: `Google Sheets API error: ${response.status}` })
+      );
+    }
+
+    const data = yield* Effect.tryPromise({
+      try: async () => response.json() as Promise<{ values?: string[][] }>,
+      catch: (error) => new GoogleAuthError({ message: "Failed to parse response", cause: error }),
+    });
+
+    return data.values ?? [];
+  });

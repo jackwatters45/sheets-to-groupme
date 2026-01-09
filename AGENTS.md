@@ -60,7 +60,7 @@ export class GoogleSheetsClient extends Effect.Service<GoogleSheetsClient>()(
   "GoogleSheetsClient",
   {
     effect: Effect.gen(function* () {
-      const accessToken = yield* GoogleAccessToken;
+      const config = yield* ConfigTag;
 
       return {
         fetchRows: (sheetId: string, range: string) =>
@@ -73,11 +73,25 @@ export class GoogleSheetsClient extends Effect.Service<GoogleSheetsClient>()(
           }),
       };
     }),
-    dependencies: [GoogleAccessToken],
+    dependencies: [],
   }
 ) {}
 
-// Providing config as a dependency tag
+// Use a single global ConfigTag for all app configuration
+export class ConfigTag extends Context.Tag("AppConfig")<ConfigTag, AppConfig>() {}
+
+// Provide config at the layer level
+export const GoogleSheetsClientLive = Layer.succeed(ConfigTag, ConfigTag.of());
+```
+
+**Key patterns:**
+- Use `Effect.Service` for all services (NOT factory functions)
+- Use a single global `ConfigTag` for all environment configuration
+- Inject config via `yield* ConfigTag` inside service implementations
+- Use `Layer.succeed` to provide the config layer
+- No barrel exports (`index.ts`) - export directly from each module
+- DO NOT declare return types on Effect functions - let TypeScript infer them
+- Use `yield* AppConfig` to access config directly (Config is built into Effect)
 export const GoogleSheetsClientLive = Layer.mergeAll(
   GoogleSheetsClient.Default,
   Layer.effect(GoogleAccessToken, Config.string("GOOGLE_ACCESS_TOKEN"))

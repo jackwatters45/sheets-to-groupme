@@ -46,6 +46,20 @@
     ]
   },
   {
+    "id": "TEST-001",
+    "category": "quality",
+    "description": "Configure testing infrastructure with @effect/vitest",
+    "passes": false,
+    "steps": [
+      "Install @effect/vitest and vitest as dev dependencies",
+      "Create vitest.config.ts with Effect runtime support",
+      "Add test script to package.json",
+      "Write unit tests for GoogleSheetsClient",
+      "Write integration tests with mocked fetch",
+      "Run bun test to confirm tests execute"
+    ]
+  },
+  {
     "id": "GSheet-001",
     "category": "integration",
     "description": "Google Sheets API client with Effect",
@@ -61,7 +75,7 @@
     "id": "GSheet-002",
     "category": "integration",
     "description": "Google Sheets authentication with Service Account",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Configure JWT authentication for Google API",
       "Handle credential loading from environment",

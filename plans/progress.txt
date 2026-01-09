@@ -98,3 +98,8 @@ Gotchas: Auto-stop/start machines configured for cost efficiency, HTTP service o
 Summary: Created .github/workflows/ci.yml with oven-sh/setup-bun action, runs on push to main and PRs
 Files: .github/workflows/ci.yml
 Gotchas: Installs dependencies with --frozen-lockfile for reproducible builds, Runs typecheck, format check, and biome check
+
+[CI-002] COMPLETE
+Summary: Created .github/workflows/cd.yml for automatic deployment to Fly.io on push to main
+Files: .github/workflows/cd.yml
+Gotchas: Uses docker/build-push-action with GHA cache, Deploys using flyctl with FLY_API_TOKEN secret, Triggered on push to main or manual workflow_dispatch

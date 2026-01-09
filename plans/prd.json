@@ -253,7 +253,7 @@
     "id": "CI-002",
     "category": "ci-cd",
     "description": "GitHub Actions CD workflow",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create .github/workflows/cd.yml",
       "Trigger on push to main branch",

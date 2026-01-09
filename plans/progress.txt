@@ -68,3 +68,8 @@ Gotchas: Used Effect.promise for async row ID generation, Arr.reduce for process
 Summary: Enhanced sync loop with comprehensive error handling including failedRows tracking, error timestamps, and detailed error reporting
 Files: src/sync/sync.ts
 Gotchas: Added failedRows array to SyncResult for tracking failed rows with timestamps, error messages, and contact data for retry
+
+[CORE-001] COMPLETE
+Summary: Implemented structured logging with Effect.Service pattern using LoggerService, LogLevel enum, and structured LogEntry interface
+Files: src/core/logger.ts, src/main.ts, src/sync/sync.ts
+Gotchas: LOG_FORMAT=json environment variable support for JSON output, Exported info/error/warn/debug functions for easy use throughout codebase

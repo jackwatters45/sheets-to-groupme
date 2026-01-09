@@ -180,7 +180,7 @@
     "id": "CORE-001",
     "category": "core",
     "description": "Structured logging with Effect",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create Logger layer with LogLevel support",
       "Log sync start/end with timestamps",

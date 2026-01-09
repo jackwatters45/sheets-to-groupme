@@ -120,7 +120,7 @@
     "id": "GMe-003",
     "category": "integration",
     "description": "GroupMe member addition with duplicate detection",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Check if member already exists in group",
       "Handle already_member response gracefully",

@@ -11,6 +11,7 @@ export interface AddMemberResult {
   success: boolean;
   memberId?: string;
   userId?: string;
+  alreadyExists?: boolean;
 }
 
 export class GroupMeApiError extends Data.TaggedError("GroupMeApiError")<{
@@ -21,6 +22,13 @@ export class GroupMeApiError extends Data.TaggedError("GroupMeApiError")<{
 
 export class GroupMeUnauthorizedError extends Data.TaggedError("GroupMeUnauthorizedError")<{
   readonly message: string;
+}> {}
+
+export class GroupMeMemberAlreadyExistsError extends Data.TaggedError(
+  "GroupMeMemberAlreadyExistsError"
+)<{
+  readonly message: string;
+  readonly memberId?: string;
 }> {}
 
 export const validateGroupMeToken = Effect.gen(function* () {
@@ -59,6 +67,55 @@ export const validateGroupMeToken = Effect.gen(function* () {
   return response;
 });
 
+export const getGroupMembers = (groupId: string) =>
+  Effect.gen(function* () {
+    const config = yield* AppConfig;
+    const targetGroupId = groupId || config.groupme.groupId;
+
+    const response = yield* Effect.tryPromise({
+      try: async () => {
+        const res = await fetch(`https://api.groupme.com/v3/groups/${targetGroupId}`, {
+          headers: {
+            Authorization: `Bearer ${config.groupme.accessToken}`,
+            Accept: "application/json",
+          },
+        });
+
+        if (res.status === 401) {
+          throw new GroupMeUnauthorizedError({
+            message: "Unauthorized - check GroupMe access token",
+          });
+        }
+
+        if (!res.ok) {
+          const errorBody = await res.text();
+          throw new Error(`${res.status} - ${errorBody}`);
+        }
+
+        const data = (await res.json()) as {
+          response?: {
+            members?: Array<{
+              user_id: string;
+              nickname: string;
+              email?: string;
+              phone_number?: string;
+            }>;
+          };
+        };
+        return data.response?.members || [];
+      },
+      catch: (error) =>
+        error instanceof GroupMeUnauthorizedError
+          ? error
+          : new GroupMeApiError({
+              message: error instanceof Error ? error.message : "Failed to get group members",
+              cause: error,
+            }),
+    });
+
+    return response;
+  });
+
 export const addGroupMeMember = (groupId: string, member: GroupMeMember) =>
   Effect.gen(function* () {
     const config = yield* AppConfig;
@@ -92,6 +149,18 @@ export const addGroupMeMember = (groupId: string, member: GroupMeMember) =>
 
         if (!res.ok) {
           const errorBody = await res.text();
+
+          // Check for "already_member" response
+          if (errorBody.includes("already_member") || errorBody.includes("already in group")) {
+            // Try to extract member_id from error response
+            const errorData = JSON.parse(errorBody);
+            const memberId = errorData?.meta?.member_id || errorData?.response?.member_id;
+            throw new GroupMeMemberAlreadyExistsError({
+              message: "Member already exists in group",
+              memberId,
+            });
+          }
+
           throw new Error(`${res.status} - ${errorBody}`);
         }
 
@@ -103,10 +172,12 @@ export const addGroupMeMember = (groupId: string, member: GroupMeMember) =>
           success: true,
           memberId: result?.member_id,
           userId: result?.user_id,
+          alreadyExists: false,
         };
       },
       catch: (error) =>
-        error instanceof GroupMeUnauthorizedError
+        error instanceof GroupMeUnauthorizedError ||
+        error instanceof GroupMeMemberAlreadyExistsError
           ? error
           : new GroupMeApiError({
               message: error instanceof Error ? error.message : "Request failed",

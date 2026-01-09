@@ -131,7 +131,7 @@
     "id": "STATE-001",
     "category": "core",
     "description": "Local state store for tracking processed rows",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Load state.json from data directory",
       "Track processed row IDs and timestamps",

@@ -1,0 +1,135 @@
+[
+  {
+    "id": "INIT-001",
+    "category": "setup",
+    "description": "Initialize Bun + TypeScript + Effect project",
+    "passes": false,
+    "steps": [
+      "Create package.json with bun, effect, typescript dependencies",
+      "Configure tsconfig.json for strict mode",
+      "Verify bun run typecheck passes"
+    ]
+  },
+  {
+    "id": "STRUCT-001",
+    "category": "setup",
+    "description": "Create project directory structure",
+    "passes": false,
+    "steps": [
+      "Create src/google, src/groupme, src/state, src/scheduler directories",
+      "Add index.ts files with barrel exports",
+      "Verify structure compiles"
+    ]
+  },
+  {
+    "id": "CONFIG-001",
+    "category": "setup",
+    "description": "Environment configuration with Effect Config",
+    "passes": false,
+    "steps": [
+      "Define config schema for required env vars",
+      "Create ConfigProvider layer",
+      "Validate all required fields present"
+    ]
+  },
+  {
+    "id": "GSheet-001",
+    "category": "integration",
+    "description": "Google Sheets API client with Effect",
+    "passes": false,
+    "steps": [
+      "Create GoogleHttpClient layer with HttpClient",
+      "Implement fetchRows function calling spreadsheets.values.get",
+      "Parse ValueRange response into structured data"
+    ]
+  },
+  {
+    "id": "GSheet-002",
+    "category": "integration",
+    "description": "Configurable column mapping",
+    "passes": false,
+    "steps": [
+      "Accept COLUMN_NAME, COLUMN_EMAIL, COLUMN_PHONE env vars",
+      "Parse header row to find column indices",
+      "Extract user data using mapped columns"
+    ]
+  },
+  {
+    "id": "GMe-001",
+    "category": "integration",
+    "description": "GroupMe API client with Effect",
+    "passes": false,
+    "steps": [
+      "Create GroupMeHttpClient layer with HttpClient",
+      "Implement addMember function calling POST /groups/{id}/members/add",
+      "Handle response and errors"
+    ]
+  },
+  {
+    "id": "STATE-001",
+    "category": "core",
+    "description": "Local state store (file-based)",
+    "passes": false,
+    "steps": [
+      "Load state.json from data directory",
+      "Track processed row IDs in memory",
+      "Save state on changes to persist processed IDs"
+    ]
+  },
+  {
+    "id": "SYNC-001",
+    "category": "core",
+    "description": "Main sync loop with deduplication",
+    "passes": false,
+    "steps": [
+      "Fetch all rows from Google Sheet",
+      "Filter out already processed row IDs",
+      "Add each new member to GroupMe",
+      "Update state with newly processed IDs"
+    ]
+  },
+  {
+    "id": "CRON-001",
+    "category": "deployment",
+    "description": "Hourly cron scheduler",
+    "passes": false,
+    "steps": [
+      "Run sync on hourly interval",
+      "Exit cleanly after completion",
+      "Log start/end times"
+    ]
+  },
+  {
+    "id": "DOCKER-001",
+    "category": "deployment",
+    "description": "Dockerfile for Fly.io",
+    "passes": false,
+    "steps": [
+      "Multi-stage build with Bun",
+      "Copy source and install dependencies",
+      "Run with proper entrypoint"
+    ]
+  },
+  {
+    "id": "FLY-001",
+    "category": "deployment",
+    "description": "Fly.io configuration",
+    "passes": false,
+    "steps": [
+      "Create fly.toml with sfo region",
+      "Add persistent volume mount for data directory",
+      "Configure health checks"
+    ]
+  },
+  {
+    "id": "VERIFY-001",
+    "category": "quality",
+    "description": "Build and typecheck verification",
+    "passes": false,
+    "steps": [
+      "bun run build exits with code 0",
+      "bun run typecheck passes with no errors",
+      "CI checks pass"
+    ]
+  }
+]

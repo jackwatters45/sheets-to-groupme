@@ -86,7 +86,7 @@
     "id": "GSheet-003",
     "category": "integration",
     "description": "Configurable column mapping for user data",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Accept COLUMN_NAME, COLUMN_EMAIL, COLUMN_PHONE env vars",
       "Parse header row to find column indices",

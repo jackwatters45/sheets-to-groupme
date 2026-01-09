@@ -17,3 +17,9 @@ Gotchas: Had naming conflicts between interface and const objects - renamed inte
 Summary: Configured Biome formatter and linter with biome.json, added format/check scripts to package.json
 Files: biome.json, package.json (scripts), tsconfig.json (Effect plugin)
 Gotchas: biome.json indentStyle value was "spaces" but Biome expects "space" (singular)
+
+[CONFIG-001] COMPLETE
+Summary: Implemented environment configuration using Effect's Config API with AppConfig interface
+Files: src/config.ts, .env.example
+Gotchas: Effect.Config requires specific providers - used Config.all() to combine multiple config values
+Next: Config provider needs to be integrated with main.ts Layer

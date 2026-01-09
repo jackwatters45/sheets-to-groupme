@@ -37,7 +37,7 @@
     "id": "CONFIG-001",
     "category": "setup",
     "description": "Environment configuration with Effect Config",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Define config schema for required env vars",
       "Create ConfigProvider layer",

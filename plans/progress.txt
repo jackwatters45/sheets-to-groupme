@@ -2,3 +2,8 @@ Ralph Progress Log
 Initialized: 2026-01-10T08:05:59+11:00
 
 --- Session History ---
+
+[INIT-001] COMPLETE
+Summary: Initialized Bun + TypeScript + Effect project with package.json, tsconfig.json, biome.json, and basic main.ts entry point
+Files: package.json, tsconfig.json, biome.json, src/main.ts
+Gotchas: Effect.gen had type issues with TypeScript - simplified to Effect.sync for initial working version

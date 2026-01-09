@@ -3,7 +3,7 @@
     "id": "INIT-001",
     "category": "setup",
     "description": "Initialize Bun + TypeScript + Effect project",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create package.json with bun, effect, typescript dependencies",
       "Configure tsconfig.json for strict mode",

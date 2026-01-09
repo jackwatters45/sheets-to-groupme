@@ -49,7 +49,7 @@
     "id": "TEST-001",
     "category": "quality",
     "description": "Configure testing infrastructure with @effect/vitest",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Install @effect/vitest and vitest as dev dependencies",
       "Create vitest.config.ts with Effect runtime support",

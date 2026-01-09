@@ -1,0 +1,29 @@
+app = "sheets-to-groupme"
+
+[build]
+
+[env]
+BUN_ENV = "production"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  cpus = 1
+  cpu_kind = "shared"
+  region = "sfo"
+
+[mounts]
+  source = "sheets_data"
+  destination = "/app/data"
+
+[[statics]]
+  guest_path = "/app/data"
+  url_prefix = "/data/"

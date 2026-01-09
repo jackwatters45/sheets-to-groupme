@@ -228,7 +228,7 @@
     "id": "FLY-001",
     "category": "deployment",
     "description": "Fly.io configuration",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create fly.toml with sfo region",
       "Add persistent volume mount for data directory",

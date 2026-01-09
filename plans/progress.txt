@@ -88,3 +88,8 @@ Gotchas: @effect/vitest doesn't use a vitest plugin, just provides special it fu
 Summary: Created multi-stage Dockerfile for Fly.io deployment with oven/bun:1-alpine image
 Files: Dockerfile
 Gotchas: Project uses noEmit: true for TypeScript, so Bun runs source directly without compilation stage, Multi-stage build with builder and production stages, Non-root user for security, Health check endpoint configured
+
+[FLY-001] COMPLETE
+Summary: Created fly.toml with sfo region, shared-cpu-1x VM with 1GB memory, persistent volume mount for /app/data
+Files: fly.toml
+Gotchas: Auto-stop/start machines configured for cost efficiency, HTTP service on port 8080, Mounts section for state persistence

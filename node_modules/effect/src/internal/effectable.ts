@@ -6,6 +6,7 @@ import * as Hash from "../Hash.js"
 import { pipeArguments } from "../Pipeable.js"
 import type * as Sink from "../Sink.js"
 import type * as Stream from "../Stream.js"
+import { SingleShotGen, YieldWrap } from "../Utils.js"
 import * as OpCodes from "./opCodes/effect.js"
 import * as version from "./version.js"
 
@@ -74,6 +75,9 @@ export const EffectPrototype: Effect.Effect<never> & Equal.Equal = {
   },
   [Hash.symbol]() {
     return Hash.cached(this, Hash.random(this))
+  },
+  [Symbol.iterator]() {
+    return new SingleShotGen(new YieldWrap(this)) as any
   },
   pipe() {
     return pipeArguments(this, arguments)

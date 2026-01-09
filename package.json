@@ -12,8 +12,8 @@
     "start": "bun run src/main.ts"
   },
   "dependencies": {
-    "effect": "^2.0.0",
     "@google-cloud/local-auth": "^3.0.0",
+    "effect": "^3.19.14",
     "googleapis": "^140.0.0"
   },
   "devDependencies": {

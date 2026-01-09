@@ -49,7 +49,7 @@
     "id": "GSheet-001",
     "category": "integration",
     "description": "Google Sheets API client with Effect",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Create GoogleHttpClient layer with HttpClient",
       "Implement fetchRows function calling spreadsheets.values.get",
@@ -266,10 +266,7 @@
     "category": "quality",
     "description": "Build and typecheck verification",
     "passes": false,
-    "steps": [
-      "bun run build exits with code 0",
-      "bun run typecheck passes with no errors"
-    ]
+    "steps": ["bun run build exits with code 0", "bun run typecheck passes with no errors"]
   },
   {
     "id": "VERIFY-002",

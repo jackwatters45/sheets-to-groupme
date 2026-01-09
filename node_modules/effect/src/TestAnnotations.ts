@@ -1,6 +1,7 @@
 /**
  * @since 2.0.0
  */
+import * as RA from "./Array.js"
 import * as Context from "./Context.js"
 import type * as Effect from "./Effect.js"
 import * as Equal from "./Equal.js"
@@ -11,7 +12,6 @@ import * as core from "./internal/core.js"
 import * as fiber from "./internal/fiber.js"
 import * as MutableRef from "./MutableRef.js"
 import { hasProperty } from "./Predicate.js"
-import * as RA from "./ReadonlyArray.js"
 import * as Ref from "./Ref.js"
 import * as SortedSet from "./SortedSet.js"
 import * as TestAnnotation from "./TestAnnotation.js"
@@ -20,7 +20,7 @@ import * as TestAnnotationMap from "./TestAnnotationMap.js"
 /**
  * @since 2.0.0
  */
-export const TestAnnotationsTypeId = Symbol.for("effect/TestAnnotations")
+export const TestAnnotationsTypeId: unique symbol = Symbol.for("effect/TestAnnotations")
 
 /**
  * @since 2.0.0

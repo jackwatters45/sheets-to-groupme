@@ -1,3 +1,4 @@
+import * as Arr from "../../Array.js"
 import type * as Duration from "../../Duration.js"
 import * as Equal from "../../Equal.js"
 import { dual, pipe } from "../../Function.js"
@@ -9,7 +10,6 @@ import type * as MetricLabel from "../../MetricLabel.js"
 import * as Option from "../../Option.js"
 import { pipeArguments } from "../../Pipeable.js"
 import { hasProperty } from "../../Predicate.js"
-import * as ReadonlyArray from "../../ReadonlyArray.js"
 import * as metricKeyType from "./keyType.js"
 import * as metricLabel from "./label.js"
 
@@ -26,7 +26,7 @@ const metricKeyVariance = {
   _Type: (_: never) => _
 }
 
-const arrayEquivilence = ReadonlyArray.getEquivalence(Equal.equals)
+const arrayEquivilence = Arr.getEquivalence(Equal.equals)
 
 /** @internal */
 class MetricKeyImpl<out Type extends MetricKeyType.MetricKeyType<any, any>> implements MetricKey.MetricKey<Type> {
@@ -83,8 +83,11 @@ export const counter: {
   )
 
 /** @internal */
-export const frequency = (name: string, description?: string): MetricKey.MetricKey.Frequency =>
-  new MetricKeyImpl(name, metricKeyType.frequency, Option.fromNullable(description))
+export const frequency = (name: string, options?: {
+  readonly description?: string | undefined
+  readonly preregisteredWords?: ReadonlyArray<string> | undefined
+}): MetricKey.MetricKey.Frequency =>
+  new MetricKeyImpl(name, metricKeyType.frequency(options), Option.fromNullable(options?.description))
 
 /** @internal */
 export const gauge: {
@@ -161,4 +164,4 @@ export const taggedWithLabels = dual<
 >(2, (self, extraTags) =>
   extraTags.length === 0
     ? self
-    : new MetricKeyImpl(self.name, self.keyType, self.description, ReadonlyArray.union(self.tags, extraTags)))
+    : new MetricKeyImpl(self.name, self.keyType, self.description, Arr.union(self.tags, extraTags)))

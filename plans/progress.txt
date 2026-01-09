@@ -23,3 +23,8 @@ Summary: Implemented environment configuration using Effect's Config API with Ap
 Files: src/config.ts, .env.example
 Gotchas: Effect.Config requires specific providers - used Config.all() to combine multiple config values
 Next: Config provider needs to be integrated with main.ts Layer
+
+[GSheet-001] COMPLETE
+Summary: Implemented Google Sheets API client using Effect.Service pattern with GoogleAccessToken as a dependency tag
+Files: src/google/client.ts
+Gotchas: Upgraded effect from 2.4.19 to 3.19.14 for Effect.Service support, Used laxdb as reference for Effect.Service pattern with Context.Tag for config dependencies

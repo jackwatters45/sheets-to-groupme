@@ -19,6 +19,46 @@ export class GroupMeApiError extends Data.TaggedError("GroupMeApiError")<{
   readonly cause?: unknown;
 }> {}
 
+export class GroupMeUnauthorizedError extends Data.TaggedError("GroupMeUnauthorizedError")<{
+  readonly message: string;
+}> {}
+
+export const validateGroupMeToken = Effect.gen(function* () {
+  const config = yield* AppConfig;
+
+  const response = yield* Effect.tryPromise({
+    try: async () => {
+      const res = await fetch("https://api.groupme.com/v3/users/me", {
+        headers: {
+          Authorization: `Bearer ${config.groupme.accessToken}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (res.status === 401) {
+        throw new GroupMeUnauthorizedError({ message: "Invalid or expired GroupMe access token" });
+      }
+
+      if (!res.ok) {
+        const errorBody = await res.text();
+        throw new Error(`Token validation failed: ${res.status} - ${errorBody}`);
+      }
+
+      const data = (await res.json()) as { response?: { id: string; name: string; email: string } };
+      return data.response;
+    },
+    catch: (error) =>
+      error instanceof GroupMeUnauthorizedError
+        ? error
+        : new GroupMeApiError({
+            message: error instanceof Error ? error.message : "Token validation failed",
+            cause: error,
+          }),
+  });
+
+  return response;
+});
+
 export const addGroupMeMember = (groupId: string, member: GroupMeMember) =>
   Effect.gen(function* () {
     const config = yield* AppConfig;
@@ -44,6 +84,12 @@ export const addGroupMeMember = (groupId: string, member: GroupMeMember) =>
           }),
         });
 
+        if (res.status === 401) {
+          throw new GroupMeUnauthorizedError({
+            message: "Unauthorized - check GroupMe access token",
+          });
+        }
+
         if (!res.ok) {
           const errorBody = await res.text();
           throw new Error(`${res.status} - ${errorBody}`);
@@ -60,10 +106,12 @@ export const addGroupMeMember = (groupId: string, member: GroupMeMember) =>
         };
       },
       catch: (error) =>
-        new GroupMeApiError({
-          message: error instanceof Error ? error.message : "Request failed",
-          cause: error,
-        }),
+        error instanceof GroupMeUnauthorizedError
+          ? error
+          : new GroupMeApiError({
+              message: error instanceof Error ? error.message : "Request failed",
+              cause: error,
+            }),
     });
 
     return response;

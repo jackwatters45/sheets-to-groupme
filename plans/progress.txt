@@ -38,3 +38,8 @@ Gotchas: Used global Config.AppConfig with yield* for config access, Added unit 
 Summary: Implemented GroupMe API client using Effect patterns with addGroupMeMember function
 Files: src/groupme/client.ts
 Gotchas: None - followed same pattern as Google Sheets client
+
+[GMe-002] COMPLETE
+Summary: Implemented GroupMe token validation and 401 error handling with validateGroupMeToken function
+Files: src/groupme/client.ts
+Gotchas: Used tagged error inheritance to distinguish GroupMeUnauthorizedError from general GroupMeApiError

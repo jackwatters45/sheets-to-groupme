@@ -109,7 +109,7 @@
     "id": "GMe-002",
     "category": "integration",
     "description": "GroupMe authentication and token management",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Configure Bearer token authentication",
       "Handle 401 errors and token refresh",

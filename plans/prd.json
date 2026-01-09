@@ -216,7 +216,7 @@
     "id": "DOCKER-001",
     "category": "deployment",
     "description": "Dockerfile for Fly.io",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Multi-stage build with Bun runtime",
       "Copy source and install dependencies",

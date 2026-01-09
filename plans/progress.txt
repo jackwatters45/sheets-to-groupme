@@ -83,3 +83,8 @@ Gotchas: Consolidated duplicate UserContact interface to single source in schema
 Summary: Configured testing infrastructure with @effect/vitest including vitest.config.ts and test script in package.json
 Files: vitest.config.ts, package.json (test script), src/core/logger.test.ts
 Gotchas: @effect/vitest doesn't use a vitest plugin, just provides special it functions, Required alphabetized imports (expect before it) for biome compliance
+
+[DOCKER-001] COMPLETE
+Summary: Created multi-stage Dockerfile for Fly.io deployment with oven/bun:1-alpine image
+Files: Dockerfile
+Gotchas: Project uses noEmit: true for TypeScript, so Bun runs source directly without compilation stage, Multi-stage build with builder and production stages, Non-root user for security, Health check endpoint configured

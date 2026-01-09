@@ -113,3 +113,45 @@ export const stateStore = createStateStore();
 
 export const loadState = stateStore.load;
 export const saveState = stateStore.save;
+
+// Row ID generation strategy
+const HASH_ALGORITHM = "SHA256";
+
+const hashRowData = async (row: string[]): Promise<string> => {
+  const data = row.join("|");
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(data);
+  const hashBuffer = await crypto.subtle.digest(HASH_ALGORITHM, dataBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hashHex.substring(0, 16);
+};
+
+export const generateRowId = async (row: string[]): Promise<string> => {
+  if (row.length === 0) {
+    return `empty_${Date.now()}`;
+  }
+  return hashRowData(row);
+};
+
+export const isDuplicateRow = (rowId: string, state: SyncState): boolean => {
+  return state.processedRows.has(rowId);
+};
+
+export const markRowAsProcessed = (
+  state: SyncState,
+  rowId: string,
+  success: boolean
+): SyncState => {
+  const timestamp = new Date().toISOString();
+  const newProcessedRows = new Map(state.processedRows);
+  newProcessedRows.set(rowId, {
+    rowId,
+    timestamp,
+    success,
+  });
+  return {
+    lastRun: state.lastRun || timestamp,
+    processedRows: newProcessedRows,
+  };
+};

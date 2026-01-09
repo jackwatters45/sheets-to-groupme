@@ -143,7 +143,7 @@
     "id": "STATE-002",
     "category": "core",
     "description": "Row ID generation strategy",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Implement stable row ID generation from row data",
       "Handle duplicate rows across runs",

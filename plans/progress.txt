@@ -53,3 +53,8 @@ Gotchas: GroupMe API returns "already_member" in error body for duplicates - nee
 Summary: Implemented local state store with file-based persistence using Node.js fs/promises
 Files: src/state/store.ts, src/state/index.ts
 Gotchas: Used ReadonlyMap for processedRows to prevent mutation, Node imports must come before effect imports for biome
+
+[STATE-002] COMPLETE
+Summary: Implemented row ID generation strategy using SHA256 hash of row content for stable IDs
+Files: src/state/store.ts
+Gotchas: Used crypto.subtle.digest for secure hash generation, returns 16-char truncated hash for readability

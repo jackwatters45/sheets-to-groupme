@@ -1,11 +1,8 @@
 import { Data, Effect } from "effect";
 import { AppConfig } from "../config";
+import type { UserContact } from "../core/schema";
 
-export interface UserContact {
-  name: string;
-  email: string;
-  phone: string;
-}
+export type { UserContact };
 
 export class GoogleAuthError extends Data.TaggedError("GoogleAuthError")<{
   readonly message: string;
@@ -139,11 +136,17 @@ export const extractUserContacts = (
 ): UserContact[] => {
   return rows
     .filter((row) => row.length > 0)
-    .map((row) => ({
-      name: row[columnMapping.nameIndex]?.trim() ?? "",
-      email: row[columnMapping.emailIndex]?.trim() ?? "",
-      phone: row[columnMapping.phoneIndex]?.trim() ?? "",
-    }));
+    .map((row) => {
+      const name = row[columnMapping.nameIndex]?.trim() ?? "";
+      const email = row[columnMapping.emailIndex]?.trim();
+      const phone = row[columnMapping.phoneIndex]?.trim();
+
+      return {
+        name,
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+      } as UserContact;
+    });
 };
 
 export const parseUserContacts = (

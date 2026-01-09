@@ -73,3 +73,8 @@ Gotchas: Added failedRows array to SyncResult for tracking failed rows with time
 Summary: Implemented structured logging with Effect.Service pattern using LoggerService, LogLevel enum, and structured LogEntry interface
 Files: src/core/logger.ts, src/main.ts, src/sync/sync.ts
 Gotchas: LOG_FORMAT=json environment variable support for JSON output, Exported info/error/warn/debug functions for easy use throughout codebase
+
+[CORE-002] COMPLETE
+Summary: Implemented Effect schema for type-safe data validation with UserContactSchema and SyncResultSchema using effect/Schema module
+Files: src/core/schema.ts, src/google/client.ts
+Gotchas: Consolidated duplicate UserContact interface to single source in schema.ts, Used Schema.Struct and Schema.optional for defining schemas, Used readonly array syntax for biome compliance

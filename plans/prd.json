@@ -192,7 +192,7 @@
     "id": "CORE-002",
     "category": "core",
     "description": "Effect schema for type-safe data validation",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Define UserContact schema (name, email, phone)",
       "Define SyncResult schema",

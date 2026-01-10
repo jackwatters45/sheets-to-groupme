@@ -15,10 +15,6 @@ export default defineConfig({
         "src/**/index.ts",
         "src/**/types.ts",
         "src/error/**/*.ts",
-        // TODO: these bellow tests
-        "src/state/store.ts", // Requires fs mocking, pure functions tested
-        "src/scheduler/cron.ts", // Requires interval/signal mocking, tests verify components
-        "src/sync/sync.ts", // Integration orchestration, components tested separately
       ],
       thresholds: {
         lines: 60,

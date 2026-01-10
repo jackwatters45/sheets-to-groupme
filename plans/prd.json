@@ -352,5 +352,44 @@
       "Identify any remaining gaps",
       "Add additional tests if needed to reach 90%"
     ]
+  },
+  {
+    "id": "NOTIFY-001",
+    "category": "integration",
+    "description": "Integrate NotifyService into cron scheduler",
+    "passes": false,
+    "steps": [
+      "Add NotifyService dependency to cron.ts syncOnce",
+      "Call notifySuccess with sync stats after successful sync",
+      "Call notifyError when sync fails",
+      "Handle notification failures gracefully (log, don't crash)",
+      "Verify Discord notifications work in integration test"
+    ]
+  },
+  {
+    "id": "AUTH-002",
+    "category": "integration",
+    "description": "Replace manual JWT with google-auth-library",
+    "passes": false,
+    "steps": [
+      "Install google-auth-library package",
+      "Create GoogleAuthService using Effect.Service pattern",
+      "Use GoogleAuth to get access tokens",
+      "Remove manual createJwtAssertion function",
+      "Update GoogleSheetsService to use GoogleAuthService",
+      "Add integration test (skipped without real credentials)"
+    ]
+  },
+  {
+    "id": "TEST-COVERAGE-FIX",
+    "category": "test",
+    "description": "Fix coverage gaps to meet 60% threshold",
+    "passes": false,
+    "steps": [
+      "Add SyncService tests with mocked dependencies (sync.ts at 2%)",
+      "Add StateService load/save tests with fs mocks (store.ts at 24%)",
+      "Add cron scheduler tests for syncOnce (cron.ts at 25%)",
+      "Verify coverage meets 60% threshold"
+    ]
   }
 ]

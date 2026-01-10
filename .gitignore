@@ -4,6 +4,9 @@ bun.lockb
 # Dependencies
 node_modules
 
+# ralph
+.ralph
+
 # Build output
 dist
 

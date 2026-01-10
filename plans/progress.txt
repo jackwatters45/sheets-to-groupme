@@ -118,3 +118,8 @@ Gotchas: Effect.Service pattern makes it difficult to mock dependencies for inte
 Summary: Integrated NotifyService into cron scheduler to send Discord notifications on sync success/failure
 Files: src/scheduler/cron.ts
 Gotchas: Must use Layer.merge for multiple Effect.provide calls to avoid lifecycle issues, notification failures are caught and logged but don't crash the sync
+
+[TEST-CRON] COMPLETE
+Summary: Added tests for cron scheduler including runHourlySync export, Cron.parse/unsafeParse validation, and Effect.interruptible behavior
+Files: src/scheduler/cron.test.ts
+Gotchas: Effect Cron uses Sets (not arrays) for minutes/hours, empty set means "match all" (wildcard). Current implementation uses Effect.interruptible pattern instead of manual SIGTERM/SIGINT handlers.

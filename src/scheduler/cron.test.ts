@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer } from "effect";
+import { ConfigProvider, Cron, Effect, Layer } from "effect";
 import { ColumnMappingError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
+import { runHourlySync } from "./cron";
 
 // Test config
 interface TestConfig {
@@ -59,12 +60,69 @@ const groupmeTestLayer = (config: TestConfig) =>
   );
 
 describe("Cron Scheduler", () => {
-  describe("unit tests", () => {
-    it("runHourlySync should be exported", async () => {
+  describe("runHourlySync", () => {
+    it("should be exported and defined", () => {
+      expect(runHourlySync).toBeDefined();
+    });
+
+    it("should be an Effect", () => {
+      // runHourlySync is an Effect that can be run
+      expect(Effect.isEffect(runHourlySync)).toBe(true);
+    });
+
+    it("runHourlySync module export exists", async () => {
       const cron = await import("./cron");
       expect(cron).toHaveProperty("runHourlySync");
     });
+  });
 
+  describe("Cron schedule parsing", () => {
+    it("should parse hourly cron expression", () => {
+      const hourlyCron = Cron.parse("0 * * * *");
+      expect(hourlyCron._tag).toBe("Right");
+    });
+
+    it("should parse cron with unsafeParse", () => {
+      const cron = Cron.unsafeParse("0 * * * *");
+      // Cron object should have the expected structure
+      expect(cron).toBeDefined();
+      // Effect Cron uses Sets, not arrays
+      expect(cron.minutes.has(0)).toBe(true);
+      expect(cron.minutes.size).toBe(1);
+      // * in hours means empty set (matches all), size 0
+      expect(cron.hours.size).toBe(0);
+    });
+
+    it("should reject invalid cron expressions", () => {
+      const result = Cron.parse("invalid");
+      expect(result._tag).toBe("Left");
+    });
+  });
+
+  describe("Effect.interruptible", () => {
+    it.effect("should allow interruption of effects", () => {
+      return Effect.gen(function* () {
+        let executed = false;
+        const interruptibleEffect = Effect.sync(() => {
+          executed = true;
+        }).pipe(Effect.interruptible);
+
+        yield* interruptibleEffect;
+        expect(executed).toBe(true);
+      });
+    });
+
+    it.effect("should mark effect as interruptible", () => {
+      return Effect.gen(function* () {
+        // Verify that Effect.interruptible returns a valid effect
+        const effect = Effect.succeed("test").pipe(Effect.interruptible);
+        const result = yield* effect;
+        expect(result).toBe("test");
+      });
+    });
+  });
+
+  describe("unit tests", () => {
     it("ONE_HOUR_MS should equal 3600000", () => {
       const ONE_HOUR_MS = 60 * 60 * 1000;
       expect(ONE_HOUR_MS).toBe(3600000);

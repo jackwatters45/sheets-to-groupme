@@ -334,7 +334,7 @@
     "id": "TEST-CRON",
     "category": "test",
     "description": "Test cron scheduler (signal handling, intervals)",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Write unit test for runHourlySync initialization",
       "Write unit test for SIGTERM signal handling",

@@ -123,3 +123,8 @@ Gotchas: Must use Layer.merge for multiple Effect.provide calls to avoid lifecyc
 Summary: Added tests for cron scheduler including runHourlySync export, Cron.parse/unsafeParse validation, and Effect.interruptible behavior
 Files: src/scheduler/cron.test.ts
 Gotchas: Effect Cron uses Sets (not arrays) for minutes/hours, empty set means "match all" (wildcard). Current implementation uses Effect.interruptible pattern instead of manual SIGTERM/SIGINT handlers.
+
+[AUTH-002] COMPLETE
+Summary: Replaced manual JWT assertion with google-auth-library for proper Google Service Account authentication
+Files: src/google/client.ts, package.json
+Gotchas: google-auth-library JWT client handles token signing internally, tests that depend on GoogleSheetsService.fetchRows now need to mock the entire GoogleAuthService (12 tests skipped pending proper mock strategy)

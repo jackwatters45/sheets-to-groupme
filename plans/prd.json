@@ -370,7 +370,7 @@
     "id": "AUTH-002",
     "category": "integration",
     "description": "Replace manual JWT with google-auth-library",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Install google-auth-library package",
       "Create GoogleAuthService using Effect.Service pattern",

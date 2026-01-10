@@ -1,4 +1,5 @@
 import { Data, Effect } from "effect";
+import { JWT } from "google-auth-library";
 import { AppConfig } from "../config";
 import type { UserContact } from "../core/schema";
 
@@ -14,32 +15,38 @@ export class ColumnMappingError extends Data.TaggedError("ColumnMappingError")<{
   readonly column: string;
 }> {}
 
-const base64UrlEncode = (data: unknown): string => {
-  const json = JSON.stringify(data);
-  const base64 = Buffer.from(json).toString("base64");
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-};
+/**
+ * GoogleAuthService - handles Google Service Account authentication using google-auth-library
+ */
+export class GoogleAuthService extends Effect.Service<GoogleAuthService>()("GoogleAuthService", {
+  effect: Effect.gen(function* () {
+    const config = yield* AppConfig;
 
-const createJwtAssertion = (clientEmail: string, _privateKey: string, scope: string): string => {
-  const header = { alg: "RS256", typ: "JWT" };
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: clientEmail,
-    sub: clientEmail,
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-    scope,
-  };
+    const getAccessToken = () =>
+      Effect.tryPromise({
+        try: async () => {
+          const client = new JWT({
+            email: config.google.serviceAccountEmail,
+            key: config.google.serviceAccountPrivateKey,
+            scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+          });
+          const token = await client.getAccessToken();
+          if (!token.token) {
+            throw new Error("Failed to get access token");
+          }
+          return token.token;
+        },
+        catch: (error) =>
+          new GoogleAuthError({
+            message: error instanceof Error ? error.message : "Authentication failed",
+            cause: error,
+          }),
+      });
 
-  const encodedHeader = base64UrlEncode(header);
-  const encodedPayload = base64UrlEncode(payload);
-  const signature = Buffer.from(`${encodedHeader}.${encodedPayload}.test_signature`).toString(
-    "base64url"
-  );
-
-  return `${encodedHeader}.${encodedPayload}.${signature}`;
-};
+    return { getAccessToken };
+  }),
+  dependencies: [],
+}) {}
 
 // Pure utility functions (no Effect needed)
 export const findColumnIndices = (
@@ -86,44 +93,11 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
   "GoogleSheetsService",
   {
     effect: Effect.gen(function* () {
-      const config = yield* AppConfig;
+      const authService = yield* GoogleAuthService;
 
       const fetchRows = (sheetId: string, range: string) =>
         Effect.gen(function* () {
-          const jwt = createJwtAssertion(
-            config.google.serviceAccountEmail,
-            config.google.serviceAccountPrivateKey,
-            "https://www.googleapis.com/auth/spreadsheets"
-          );
-
-          const tokenResponse = yield* Effect.tryPromise({
-            try: async () =>
-              fetch("https://oauth2.googleapis.com/token", {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({
-                  grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                  assertion: jwt,
-                }),
-              }),
-            catch: (error) =>
-              new GoogleAuthError({
-                message: error instanceof Error ? error.message : "Token exchange failed",
-                cause: error,
-              }),
-          });
-
-          if (!tokenResponse.ok) {
-            return yield* Effect.fail(new GoogleAuthError({ message: "Token exchange failed" }));
-          }
-
-          const tokenData = yield* Effect.tryPromise({
-            try: async () => tokenResponse.json() as Promise<{ access_token: string }>,
-            catch: (error) =>
-              new GoogleAuthError({ message: "Failed to parse token response", cause: error }),
-          });
-
-          const accessToken = tokenData.access_token;
+          const accessToken = yield* authService.getAccessToken();
 
           const response = yield* Effect.tryPromise({
             try: async () =>
@@ -191,6 +165,6 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
 
       return { fetchRows, parseUserContacts };
     }),
-    dependencies: [],
+    dependencies: [GoogleAuthService.Default],
   }
 ) {}

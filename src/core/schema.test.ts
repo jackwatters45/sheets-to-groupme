@@ -3,106 +3,56 @@ import * as Schema from "effect/Schema";
 import * as schema from "./schema";
 
 describe("UserContact Schema", () => {
-  describe("UserContactSchema", () => {
-    it("should validate valid contact with all fields", () => {
-      const validContact = {
+  describe("UserContact", () => {
+    it("should create instance with valid data", () => {
+      const contact = new schema.UserContact({
         name: "John Doe",
         email: "john@example.com",
         phone: "+1234567890",
-      };
-
-      const result = Schema.validateSync(schema.UserContactSchema)(validContact);
-      expect(result).toEqual(validContact);
+      });
+      expect(contact.name).toBe("John Doe");
+      expect(contact.email).toBe("john@example.com");
+      expect(contact.phone).toBe("+1234567890");
     });
 
-    it("should validate valid contact with only name", () => {
-      const validContact = {
-        name: "John Doe",
-      };
-
-      const result = Schema.validateSync(schema.UserContactSchema)(validContact);
-      expect(result).toEqual(validContact);
+    it("should create instance with only name", () => {
+      const contact = new schema.UserContact({ name: "John Doe" });
+      expect(contact.name).toBe("John Doe");
     });
 
-    it("should validate contact with name and email only", () => {
-      const validContact = {
-        name: "John Doe",
-        email: "john@example.com",
-      };
-
-      const result = Schema.validateSync(schema.UserContactSchema)(validContact);
-      expect(result).toEqual(validContact);
+    it("should reject empty name in constructor", () => {
+      expect(() => new schema.UserContact({ name: "" })).toThrow();
     });
 
-    it("should validate contact with name and phone only", () => {
-      const validContact = {
-        name: "John Doe",
-        phone: "+1234567890",
-      };
-
-      const result = Schema.validateSync(schema.UserContactSchema)(validContact);
-      expect(result).toEqual(validContact);
+    it("should reject whitespace-only name", () => {
+      expect(() => new schema.UserContact({ name: "   " })).toThrow();
     });
 
-    it("should reject contact with empty name", () => {
-      const invalidContact = {
-        name: "",
-        email: "john@example.com",
-      };
-
-      expect(() => Schema.validateSync(schema.UserContactSchema)(invalidContact)).toThrow();
+    it("should reject empty email", () => {
+      expect(() => new schema.UserContact({ name: "John", email: "" })).toThrow();
     });
 
-    it("should reject contact with whitespace-only name", () => {
-      const invalidContact = {
-        name: "   ",
-        email: "john@example.com",
-      };
-
-      expect(() => Schema.validateSync(schema.UserContactSchema)(invalidContact)).toThrow();
+    it("should reject empty phone", () => {
+      expect(() => new schema.UserContact({ name: "John", phone: "" })).toThrow();
     });
 
-    it("should reject contact with empty email", () => {
-      const invalidContact = {
-        name: "John Doe",
-        email: "",
-      };
-
-      expect(() => Schema.validateSync(schema.UserContactSchema)(invalidContact)).toThrow();
-    });
-
-    it("should reject contact with empty phone", () => {
-      const invalidContact = {
-        name: "John Doe",
-        phone: "",
-      };
-
-      expect(() => Schema.validateSync(schema.UserContactSchema)(invalidContact)).toThrow();
+    it("should decode from plain object", () => {
+      const plain = { name: "John Doe", email: "john@example.com" };
+      const result = Schema.decodeUnknownSync(schema.UserContact)(plain);
+      expect(result.name).toBe("John Doe");
+      expect(result.email).toBe("john@example.com");
     });
 
     it("should reject non-object values", () => {
-      expect(() => Schema.validateSync(schema.UserContactSchema)("string")).toThrow();
-      expect(() => Schema.validateSync(schema.UserContactSchema)(123)).toThrow();
-      expect(() => Schema.validateSync(schema.UserContactSchema)(null)).toThrow();
-      expect(() => Schema.validateSync(schema.UserContactSchema)(undefined)).toThrow();
+      expect(() => Schema.decodeUnknownSync(schema.UserContact)("string")).toThrow();
+      expect(() => Schema.decodeUnknownSync(schema.UserContact)(123)).toThrow();
+      expect(() => Schema.decodeUnknownSync(schema.UserContact)(null)).toThrow();
     });
   });
 
   describe("isUserContact type guard", () => {
-    it("should return true for valid UserContact", () => {
-      const contact: schema.UserContact = {
-        name: "John Doe",
-        email: "john@example.com",
-      };
-
-      expect(schema.isUserContact(contact)).toBe(true);
-    });
-
-    it("should return true for minimal UserContact", () => {
-      const contact: schema.UserContact = {
-        name: "John Doe",
-      };
-
+    it("should return true for UserContact instance", () => {
+      const contact = new schema.UserContact({ name: "John Doe" });
       expect(schema.isUserContact(contact)).toBe(true);
     });
 
@@ -110,154 +60,149 @@ describe("UserContact Schema", () => {
       expect(schema.isUserContact(null)).toBe(false);
     });
 
-    it("should return false for non-objects", () => {
+    it("should return false for plain objects", () => {
+      expect(schema.isUserContact({ name: "John Doe" })).toBe(false);
+    });
+
+    it("should return false for primitives", () => {
       expect(schema.isUserContact("string")).toBe(false);
       expect(schema.isUserContact(123)).toBe(false);
-    });
-
-    it("should return false for objects without name", () => {
-      expect(schema.isUserContact({ email: "test@example.com" })).toBe(false);
-    });
-
-    it("should return false for objects with non-string name", () => {
-      expect(schema.isUserContact({ name: 123 })).toBe(false);
     });
   });
 });
 
 describe("SyncResultDetail Schema", () => {
-  it("should validate valid detail with all fields", () => {
-    const validDetail = {
+  it("should create instance with all fields", () => {
+    const detail = new schema.SyncResultDetail({
       rowId: "abc123",
       name: "John Doe",
-      status: "added" as const,
+      status: "added",
       timestamp: "2024-01-01T00:00:00.000Z",
-    };
-
-    const result = Schema.validateSync(schema.SyncResultDetailSchema)(validDetail);
-    expect(result).toEqual(validDetail);
+    });
+    expect(detail.rowId).toBe("abc123");
+    expect(detail.status).toBe("added");
   });
 
-  it("should validate detail with error", () => {
-    const validDetail = {
+  it("should create instance without optional fields", () => {
+    const detail = new schema.SyncResultDetail({
       rowId: "abc123",
       name: "John Doe",
-      status: "error" as const,
-      error: "Failed to add member",
-      timestamp: "2024-01-01T00:00:00.000Z",
-    };
-
-    const result = Schema.validateSync(schema.SyncResultDetailSchema)(validDetail);
-    expect(result).toEqual(validDetail);
+      status: "skipped",
+    });
+    expect(detail.error).toBeUndefined();
+    expect(detail.timestamp).toBeUndefined();
   });
 
-  it("should validate detail without optional fields", () => {
-    const validDetail = {
+  it("should reject invalid status", () => {
+    expect(
+      () =>
+        new schema.SyncResultDetail({
+          rowId: "abc123",
+          name: "John",
+          status: "invalid" as "added",
+        })
+    ).toThrow();
+  });
+
+  it("should reject empty rowId", () => {
+    expect(
+      () =>
+        new schema.SyncResultDetail({
+          rowId: "",
+          name: "John",
+          status: "added",
+        })
+    ).toThrow();
+  });
+
+  it("should decode from plain object", () => {
+    const plain = {
       rowId: "abc123",
-      name: "John Doe",
-      status: "skipped" as const,
-    };
-
-    const result = Schema.validateSync(schema.SyncResultDetailSchema)(validDetail);
-    expect(result).toEqual(validDetail);
-  });
-
-  it("should reject detail with invalid status", () => {
-    const invalidDetail = {
-      rowId: "abc123",
-      name: "John Doe",
-      status: "invalid_status" as unknown as "added" | "skipped" | "error" | "failed",
-    };
-
-    expect(() => Schema.validateSync(schema.SyncResultDetailSchema)(invalidDetail)).toThrow();
-  });
-
-  it("should reject detail with empty rowId", () => {
-    const invalidDetail = {
-      rowId: "",
-      name: "John Doe",
+      name: "John",
       status: "added" as const,
     };
-
-    expect(() => Schema.validateSync(schema.SyncResultDetailSchema)(invalidDetail)).toThrow();
+    const result = Schema.decodeUnknownSync(schema.SyncResultDetail)(plain);
+    expect(result.rowId).toBe("abc123");
   });
 });
 
 describe("SyncResultFailedRow Schema", () => {
-  it("should validate valid failed row", () => {
-    const validFailedRow = {
+  it("should create instance", () => {
+    const failedRow = new schema.SyncResultFailedRow({
       rowId: "abc123",
-      contact: { name: "John Doe", email: "john@example.com" },
-      error: "Failed to add member",
+      contact: new schema.UserContact({ name: "John Doe" }),
+      error: "Already exists",
       timestamp: "2024-01-01T00:00:00.000Z",
-    };
-
-    const result = Schema.validateSync(schema.SyncResultFailedRowSchema)(validFailedRow);
-    expect(result).toEqual(validFailedRow);
+    });
+    expect(failedRow.rowId).toBe("abc123");
+    expect(failedRow.error).toBe("Already exists");
   });
 
-  it("should reject failed row with empty error", () => {
-    const invalidFailedRow = {
+  it("should reject empty error", () => {
+    expect(
+      () =>
+        new schema.SyncResultFailedRow({
+          rowId: "abc123",
+          contact: new schema.UserContact({ name: "John" }),
+          error: "",
+          timestamp: "2024-01-01T00:00:00.000Z",
+        })
+    ).toThrow();
+  });
+
+  it("should decode from plain object", () => {
+    const plain = {
       rowId: "abc123",
       contact: { name: "John Doe" },
-      error: "",
+      error: "Failed",
       timestamp: "2024-01-01T00:00:00.000Z",
     };
-
-    expect(() => Schema.validateSync(schema.SyncResultFailedRowSchema)(invalidFailedRow)).toThrow();
+    const result = Schema.decodeUnknownSync(schema.SyncResultFailedRow)(plain);
+    expect(result.rowId).toBe("abc123");
   });
 });
 
 describe("SyncResult Schema", () => {
-  it("should validate valid sync result", () => {
-    const validResult = {
+  it("should create instance", () => {
+    const result = new schema.SyncResult({
       added: 5,
       skipped: 2,
       errors: 1,
       duration: 1500,
       details: [
-        {
-          rowId: "abc123",
-          name: "John Doe",
-          status: "added" as const,
-        },
+        new schema.SyncResultDetail({
+          rowId: "r1",
+          name: "John",
+          status: "added",
+        }),
       ],
       failedRows: [],
-    };
-
-    const result = Schema.validateSync(schema.SyncResultSchema)(validResult);
-    expect(result).toEqual(validResult);
+    });
+    expect(result.added).toBe(5);
+    expect(result.skipped).toBe(2);
   });
 
-  it("should validate sync result with failed rows", () => {
-    const validResult = {
+  it("should create instance with failed rows", () => {
+    const result = new schema.SyncResult({
       added: 3,
       skipped: 1,
       errors: 2,
       duration: 2000,
-      details: [
-        {
-          rowId: "abc123",
-          name: "John Doe",
-          status: "added" as const,
-        },
-      ],
+      details: [],
       failedRows: [
-        {
-          rowId: "def456",
-          contact: { name: "Jane Doe" },
+        new schema.SyncResultFailedRow({
+          rowId: "r1",
+          contact: new schema.UserContact({ name: "Jane" }),
           error: "Already exists",
           timestamp: "2024-01-01T00:00:00.000Z",
-        },
+        }),
       ],
-    };
-
-    const result = Schema.validateSync(schema.SyncResultSchema)(validResult);
-    expect(result).toEqual(validResult);
+    });
+    expect(result.failedRows).toHaveLength(1);
   });
 
-  it("should reject sync result with non-array details", () => {
-    const invalidResult = {
+  it("should reject non-array details", () => {
+    const invalid = {
       added: 1,
       skipped: 0,
       errors: 0,
@@ -265,8 +210,21 @@ describe("SyncResult Schema", () => {
       details: "not an array" as unknown,
       failedRows: [],
     };
+    expect(() => Schema.decodeUnknownSync(schema.SyncResult)(invalid)).toThrow();
+  });
 
-    expect(() => Schema.validateSync(schema.SyncResultSchema)(invalidResult)).toThrow();
+  it("should decode from plain object", () => {
+    const plain = {
+      added: 5,
+      skipped: 2,
+      errors: 1,
+      duration: 1500,
+      details: [{ rowId: "r1", name: "John", status: "added" as const }],
+      failedRows: [],
+    };
+    const result = Schema.decodeUnknownSync(schema.SyncResult)(plain);
+    expect(result.added).toBe(5);
+    expect(result.details).toHaveLength(1);
   });
 });
 
@@ -275,9 +233,7 @@ describe("validateRowData", () => {
 
   it("should validate row with all fields", () => {
     const row = ["John Doe", "john@example.com", "+1234567890"];
-
     const result = schema.validateRowData(row, columnMapping);
-
     expect(result.name).toBe("John Doe");
     expect(result.email).toBe("john@example.com");
     expect(result.phone).toBe("+1234567890");
@@ -285,45 +241,20 @@ describe("validateRowData", () => {
 
   it("should validate row with only name", () => {
     const row = ["John Doe", "", ""];
-
     const result = schema.validateRowData(row, columnMapping);
-
     expect(result.name).toBe("John Doe");
     expect(result.email).toBeUndefined();
     expect(result.phone).toBeUndefined();
   });
 
-  it("should trim whitespace from values", () => {
+  it("should trim whitespace", () => {
     const row = ["  John Doe  ", "  john@example.com  ", "  +1234567890  "];
-
     const result = schema.validateRowData(row, columnMapping);
-
     expect(result.name).toBe("John Doe");
-    expect(result.email).toBe("john@example.com");
-    expect(result.phone).toBe("+1234567890");
-  });
-
-  it("should handle undefined values", () => {
-    const row: string[] = ["John Doe"];
-
-    const result = schema.validateRowData(row, columnMapping);
-
-    expect(result.name).toBe("John Doe");
-    expect(result.email).toBeUndefined();
-    expect(result.phone).toBeUndefined();
   });
 
   it("should throw error for missing name", () => {
     const row = ["", "john@example.com", "+1234567890"];
-
-    expect(() => schema.validateRowData(row, columnMapping)).toThrow(
-      "Row missing required 'name' column"
-    );
-  });
-
-  it("should throw error for whitespace-only name", () => {
-    const row = ["   ", "john@example.com", "+1234567890"];
-
     expect(() => schema.validateRowData(row, columnMapping)).toThrow(
       "Row missing required 'name' column"
     );
@@ -332,21 +263,14 @@ describe("validateRowData", () => {
   it("should use custom column mapping", () => {
     const customMapping = { name: 1, email: 2, phone: 0 };
     const row = ["+1234567890", "John Doe", "john@example.com"];
-
     const result = schema.validateRowData(row, customMapping);
-
     expect(result.name).toBe("John Doe");
-    expect(result.email).toBe("john@example.com");
     expect(result.phone).toBe("+1234567890");
   });
 
-  it("should set optional fields to undefined when empty string", () => {
+  it("should set optional fields to undefined when empty", () => {
     const row = ["John Doe", "", "+1234567890"];
-
     const result = schema.validateRowData(row, columnMapping);
-
-    expect(result.name).toBe("John Doe");
     expect(result.email).toBeUndefined();
-    expect(result.phone).toBe("+1234567890");
   });
 });

@@ -48,7 +48,7 @@ export const runHourlySync = async (): Promise<void> => {
   }, ONE_HOUR_MS);
 
   while (!isShuttingDown) {
-    await Effect.sleep(1000);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   clearInterval(intervalId);

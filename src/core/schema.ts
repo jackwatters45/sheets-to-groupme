@@ -1,21 +1,12 @@
 import * as Schema from "effect/Schema";
 
-/**
- * Effect Schema for UserContact validation.
- * Ensures name is required, email and phone are optional strings.
- */
-export const UserContactSchema = Schema.Struct({
+export class UserContact extends Schema.Class<UserContact>("UserContact")({
   name: Schema.NonEmptyTrimmedString,
   email: Schema.optional(Schema.String.pipe(Schema.minLength(1))),
   phone: Schema.optional(Schema.String.pipe(Schema.minLength(1))),
-});
+}) {}
 
-export type UserContact = typeof UserContactSchema.Type;
-
-/**
- * Effect Schema for SyncResultDetail.
- */
-export const SyncResultDetailSchema = Schema.Struct({
+export class SyncResultDetail extends Schema.Class<SyncResultDetail>("SyncResultDetail")({
   rowId: Schema.NonEmptyTrimmedString,
   name: Schema.NonEmptyTrimmedString,
   status: Schema.Union(
@@ -26,48 +17,34 @@ export const SyncResultDetailSchema = Schema.Struct({
   ),
   error: Schema.optional(Schema.String),
   timestamp: Schema.optional(Schema.String),
-});
+}) {}
 
-export type SyncResultDetail = typeof SyncResultDetailSchema.Type;
-
-/**
- * Effect Schema for SyncResultFailedRow.
- */
-export const SyncResultFailedRowSchema = Schema.Struct({
+export class SyncResultFailedRow extends Schema.Class<SyncResultFailedRow>("SyncResultFailedRow")({
   rowId: Schema.NonEmptyTrimmedString,
-  contact: UserContactSchema,
+  contact: UserContact,
   error: Schema.NonEmptyTrimmedString,
   timestamp: Schema.NonEmptyTrimmedString,
-});
+}) {}
 
-export type SyncResultFailedRow = typeof SyncResultFailedRowSchema.Type;
-
-/**
- * Effect Schema for SyncResult validation.
- */
-export const SyncResultSchema = Schema.Struct({
+export class SyncResult extends Schema.Class<SyncResult>("SyncResult")({
   added: Schema.Number,
   skipped: Schema.Number,
   errors: Schema.Number,
   duration: Schema.Number,
-  details: Schema.Array(SyncResultDetailSchema),
-  failedRows: Schema.Array(SyncResultFailedRowSchema),
-});
+  details: Schema.Array(SyncResultDetail),
+  failedRows: Schema.Array(SyncResultFailedRow),
+}) {}
 
-export type SyncResult = typeof SyncResultSchema.Type;
-
-/**
- * Type guard for UserContact compatibility using schema.
- */
 export const isUserContact = (value: unknown): value is UserContact => {
-  return Schema.is(UserContactSchema)(value);
+  return Schema.is(UserContact)(value);
 };
 
 /**
- * Validates raw row data from Google Sheets and transforms it to UserContact.
- * @param row - Raw row data (array of cell values)
- * @param columnMapping - Mapping of column names to indices
- * @returns Validated UserContact or throws error
+ * Validates and transforms raw row data from Google Sheets into a UserContact.
+ * @param row - Raw row data from Google Sheets (array of cell values)
+ * @param columnMapping - Column indices for name, email, and phone
+ * @returns Validated UserContact instance
+ * @throws Error if required 'name' column is missing or empty
  */
 export const validateRowData = (
   row: string[],
@@ -81,9 +58,9 @@ export const validateRowData = (
     throw new Error("Row missing required 'name' column");
   }
 
-  return {
+  return new UserContact({
     name,
     email: email || undefined,
     phone: phone || undefined,
-  } as UserContact;
+  });
 };

@@ -82,8 +82,8 @@ const processContact = (
 
     const member: GroupMeMember = {
       nickname: contact.name,
-      email: contact.email,
-      phone_number: contact.phone,
+      ...(contact.email !== undefined && { email: contact.email }),
+      ...(contact.phone !== undefined && { phone_number: contact.phone }),
     };
 
     const addResult = yield* addGroupMeMember(groupId, member).pipe(

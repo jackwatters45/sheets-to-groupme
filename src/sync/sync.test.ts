@@ -1,17 +1,121 @@
 import { describe, expect, it } from "@effect/vitest";
+import { ConfigProvider, Effect, Layer } from "effect";
+import { vi } from "vitest";
 import { SyncResult, SyncResultDetail, type SyncResultFailedRow } from "../core/schema";
 import { SyncError, SyncService } from "./sync";
 
+// Create hoisted mock for google-auth-library
+const mockJWT = vi.hoisted(() => {
+  return class MockJWT {
+    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
+  };
+});
+
+vi.mock("google-auth-library", () => ({
+  JWT: mockJWT,
+}));
+
+interface TestConfig {
+  google: {
+    sheetId: string;
+    serviceAccountEmail: string;
+    serviceAccountPrivateKey: string;
+    projectId: string;
+  };
+  groupme: { groupId: string; accessToken: string };
+  sync: { columnName: string; columnEmail: string; columnPhone: string };
+  deployment: { flyRegion: string; discordWebhookUrl: string };
+}
+
+const createTestConfigProvider = (config: TestConfig) =>
+  ConfigProvider.fromMap(
+    new Map([
+      ["GOOGLE_SHEET_ID", config.google.sheetId],
+      ["GOOGLE_SERVICE_ACCOUNT_EMAIL", config.google.serviceAccountEmail],
+      ["GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", config.google.serviceAccountPrivateKey],
+      ["GOOGLE_PROJECT_ID", config.google.projectId],
+      ["GROUPME_GROUP_ID", config.groupme.groupId],
+      ["GROUPME_ACCESS_TOKEN", config.groupme.accessToken],
+      ["COLUMN_NAME", config.sync.columnName],
+      ["COLUMN_EMAIL", config.sync.columnEmail],
+      ["COLUMN_PHONE", config.sync.columnPhone],
+      ["FLY_REGION", config.deployment.flyRegion],
+      ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
+    ])
+  );
+
+const createTestConfig = (): TestConfig => ({
+  google: {
+    sheetId: "test-sheet-id",
+    serviceAccountEmail: "test@example.iam.gserviceaccount.com",
+    serviceAccountPrivateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+    projectId: "test-project",
+  },
+  groupme: { groupId: "test-group-id", accessToken: "test-token" },
+  sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
+  deployment: {
+    flyRegion: "sfo",
+    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
+  },
+});
+
 describe("SyncService", () => {
   describe("run - empty data", () => {
-    // Skip: These tests require mocking google-auth-library JWT client
-    // TODO: Implement proper mocking strategy for GoogleAuthService
-    it.skip("should return empty result when no rows", () => {
-      expect(true).toBe(true);
+    it.effect("should return empty result when no rows", () => {
+      const testConfig = createTestConfig();
+
+      const mockFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ values: [] }),
+      });
+
+      const testLayer = SyncService.Default.pipe(
+        Layer.provide(Layer.setConfigProvider(createTestConfigProvider(testConfig)))
+      );
+
+      return Effect.gen(function* () {
+        const originalFetch = globalThis.fetch;
+        try {
+          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
+          const syncService = yield* SyncService;
+          const result = yield* syncService.run;
+
+          expect(result.added).toBe(0);
+          expect(result.skipped).toBe(0);
+          expect(result.errors).toBe(0);
+          expect(result.details).toHaveLength(0);
+        } finally {
+          globalThis.fetch = originalFetch;
+        }
+      }).pipe(Effect.provide(testLayer));
     });
 
-    it.skip("should return empty result when no valid contacts", () => {
-      expect(true).toBe(true);
+    it.effect("should return empty result when no valid contacts", () => {
+      const testConfig = createTestConfig();
+
+      const mockFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ values: [["Name", "Email", "Phone"]] }),
+      });
+
+      const testLayer = SyncService.Default.pipe(
+        Layer.provide(Layer.setConfigProvider(createTestConfigProvider(testConfig)))
+      );
+
+      return Effect.gen(function* () {
+        const originalFetch = globalThis.fetch;
+        try {
+          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
+          const syncService = yield* SyncService;
+          const result = yield* syncService.run;
+
+          expect(result.added).toBe(0);
+          expect(result.skipped).toBe(0);
+          expect(result.errors).toBe(0);
+        } finally {
+          globalThis.fetch = originalFetch;
+        }
+      }).pipe(Effect.provide(testLayer));
     });
   });
 

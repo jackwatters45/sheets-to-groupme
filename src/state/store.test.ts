@@ -12,14 +12,12 @@ const createMockState = (
 
 describe("State Store", () => {
   describe("generateRowId", () => {
-    /* v8 ignore next 3 */
-    it.skip("should return empty marker for empty row", async () => {
+    it("should return empty marker for empty row", async () => {
       const rowId = await store.generateRowId([]);
       expect(rowId).toMatch(/^empty_\d+$/);
     });
 
-    /* v8 ignore next 3 */
-    it.skip("should generate consistent hash for same row", async () => {
+    it("should generate consistent hash for same row", async () => {
       const row = ["John Doe", "john@example.com", "555-1234"];
       const id1 = await store.generateRowId(row);
       const id2 = await store.generateRowId(row);
@@ -27,8 +25,7 @@ describe("State Store", () => {
       expect(id1).toHaveLength(16);
     });
 
-    /* v8 ignore next 3 */
-    it.skip("should generate different hashes for different rows", async () => {
+    it("should generate different hashes for different rows", async () => {
       const row1 = ["John Doe", "john@example.com", "555-1234"];
       const row2 = ["Jane Doe", "jane@example.com", "555-5678"];
 
@@ -38,14 +35,12 @@ describe("State Store", () => {
       expect(id1).not.toBe(id2);
     });
 
-    /* v8 ignore next 3 */
-    it.skip("should handle row with single element", async () => {
+    it("should handle row with single element", async () => {
       const rowId = await store.generateRowId(["single"]);
       expect(rowId).toHaveLength(16);
     });
 
-    /* v8 ignore next 3 */
-    it.skip("should handle row with special characters", async () => {
+    it("should handle row with special characters", async () => {
       const row = ["Name with spaces & symbols!", "email@test.com", "+1 (555) 123-4567"];
       const rowId = await store.generateRowId(row);
       expect(rowId).toHaveLength(16);

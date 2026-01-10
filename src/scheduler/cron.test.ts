@@ -1,5 +1,18 @@
-import { describe, expect, it, vi } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import { ConfigProvider, Cron, Effect, Layer } from "effect";
+import { vi } from "vitest";
+
+// Create hoisted mock for google-auth-library
+const mockJWT = vi.hoisted(() => {
+  return class MockJWT {
+    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
+  };
+});
+
+vi.mock("google-auth-library", () => ({
+  JWT: mockJWT,
+}));
+
 import { ColumnMappingError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
 import { runHourlySync } from "./cron";
@@ -138,10 +151,29 @@ describe("Cron Scheduler", () => {
   });
 
   describe("integration tests", () => {
-    // Skip: This test requires mocking google-auth-library JWT client
-    // TODO: Implement proper mocking strategy for GoogleAuthService
-    it.skip("should fetch rows from Google Sheets", () => {
-      expect(true).toBe(true);
+    it.effect("should fetch rows from Google Sheets", () => {
+      const testConfig = createTestConfig();
+      const mockValues = [
+        ["Name", "Email", "Phone"],
+        ["John Doe", "john@example.com", "555-1234"],
+      ];
+
+      const mockFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ values: mockValues }),
+      });
+
+      return Effect.gen(function* () {
+        const originalFetch = globalThis.fetch;
+        try {
+          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
+          const service = yield* GoogleSheetsService;
+          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
+          expect(result).toEqual(mockValues);
+        } finally {
+          globalThis.fetch = originalFetch;
+        }
+      }).pipe(Effect.provide(googleTestLayer(testConfig)));
     });
 
     it.effect("should add member to GroupMe", () => {

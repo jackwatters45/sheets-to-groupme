@@ -16,7 +16,8 @@ vi.mock("google-auth-library", () => ({
 import { NotificationError, NotifyService } from "../error/notify";
 import { ColumnMappingError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
-import { SyncError, SyncService } from "../sync/sync";
+import { StateError } from "../state/store";
+import { SyncService } from "../sync/sync";
 import { CronService, runHourlySync } from "./cron";
 
 // Test config
@@ -176,16 +177,22 @@ describe("Cron Scheduler", () => {
 
     it.effect("should handle sync errors and call notifyError", () =>
       Effect.gen(function* () {
-        // Mock SyncService that fails - use die to create a defect that bypasses type checking
-        const syncError = new SyncError({ message: "Sync failed!" });
+        let notifyErrorCalled = false;
+
+        // Mock SyncService that fails with a StateError (valid error type for SyncService.run)
         const mockSyncService = new SyncService({
-          run: Effect.die(syncError) as typeof SyncService.prototype.run,
+          run: Effect.fail(
+            new StateError({ message: "State file corrupted" })
+          ) as typeof SyncService.prototype.run,
         });
 
-        // Mock NotifyService
+        // Mock NotifyService that tracks calls
         const mockNotifyService = new NotifyService({
           notifySuccess: () => Effect.succeed(undefined as undefined),
-          notifyError: () => Effect.succeed(undefined as undefined),
+          notifyError: () =>
+            Effect.sync(() => {
+              notifyErrorCalled = true;
+            }),
         });
 
         const testLayer = Layer.mergeAll(
@@ -198,22 +205,16 @@ describe("Cron Scheduler", () => {
           Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
         );
 
-        // The effect should complete (catchAllCause handles defects)
-        const result = yield* cronService.syncOnce.pipe(
-          Effect.catchAllCause(() =>
-            Effect.succeed({
-              added: 0,
-              skipped: 0,
-              errors: 1,
-              duration: 0,
-              details: [],
-              failedRows: [],
-            })
-          )
-        );
+        // syncOnce catches errors and returns error result
+        const result = yield* cronService.syncOnce;
 
         // Should return error result
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(0);
         expect(result.errors).toBe(1);
+
+        // Should have called notifyError
+        expect(notifyErrorCalled).toBe(true);
       })
     );
 
@@ -265,16 +266,16 @@ describe("Cron Scheduler", () => {
 
     it.effect("should handle error notification failure gracefully", () =>
       Effect.gen(function* () {
-        // Mock SyncService that fails - use die to create a defect that bypasses type checking
-        const syncError = new SyncError({ message: "Sync crashed" });
+        // Mock SyncService that fails with a StateError (valid error type)
         const mockSyncService = new SyncService({
-          run: Effect.die(syncError) as typeof SyncService.prototype.run,
+          run: Effect.fail(
+            new StateError({ message: "Sync crashed" })
+          ) as typeof SyncService.prototype.run,
         });
 
-        // Mock NotifyService where both methods fail with typed errors
+        // Mock NotifyService where notifyError fails (to cover line 59)
         const mockNotifyService = new NotifyService({
-          notifySuccess: () =>
-            Effect.fail(new NotificationError({ message: "Success notification failed" })),
+          notifySuccess: () => Effect.succeed(undefined as undefined),
           notifyError: () =>
             Effect.fail(new NotificationError({ message: "Error notification also failed" })),
         });
@@ -290,23 +291,24 @@ describe("Cron Scheduler", () => {
         );
 
         // Should still return error result even if notification fails
-        const result = yield* cronService.syncOnce.pipe(
-          Effect.catchAllCause(() =>
-            Effect.succeed({
-              added: 0,
-              skipped: 0,
-              errors: 1,
-              duration: 0,
-              details: [],
-              failedRows: [],
-            })
-          )
-        );
+        const result = yield* cronService.syncOnce;
 
         expect(result.added).toBe(0);
         expect(result.errors).toBe(1);
       })
     );
+  });
+
+  describe("runHourlySync export", () => {
+    it("should be an Effect", () => {
+      expect(Effect.isEffect(runHourlySync)).toBe(true);
+    });
+
+    it("should be properly configured", () => {
+      // runHourlySync is the main export for scheduled runs
+      // It requires CronService.Default which includes SyncService and NotifyService
+      expect(runHourlySync).toBeDefined();
+    });
   });
 
   describe("Cron schedule parsing", () => {

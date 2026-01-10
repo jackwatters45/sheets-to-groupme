@@ -3,16 +3,8 @@ import * as NodePath from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { afterEach, beforeEach } from "vitest";
+import { createMockState } from "../test/helpers";
 import * as store from "./store";
-
-// Helper to create mock state
-const createMockState = (
-  lastRun: string | null = null,
-  processedRows?: Record<string, store.ProcessedRow>
-): store.SyncState => ({
-  lastRun,
-  processedRows: new Map(Object.entries(processedRows || {})),
-});
 
 describe("State Store", () => {
   describe("generateRowId", () => {

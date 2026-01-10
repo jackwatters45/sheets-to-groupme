@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer } from "effect";
+import { Effect } from "effect";
+import { createTestConfig } from "../test/config";
+import { createGroupMeTestLayer } from "../test/helpers";
 import {
   GroupMeApiError,
   type GroupMeMember,
@@ -7,55 +9,6 @@ import {
   GroupMeService,
   GroupMeUnauthorizedError,
 } from "./client";
-
-interface TestConfig {
-  google: {
-    sheetId: string;
-    serviceAccountEmail: string;
-    serviceAccountPrivateKey: string;
-    projectId: string;
-  };
-  groupme: { groupId: string; accessToken: string };
-  sync: { columnName: string; columnEmail: string; columnPhone: string };
-  deployment: { flyRegion: string; discordWebhookUrl: string };
-}
-
-const createTestConfigProvider = (config: TestConfig) =>
-  ConfigProvider.fromMap(
-    new Map([
-      ["GOOGLE_SHEET_ID", config.google.sheetId],
-      ["GOOGLE_SERVICE_ACCOUNT_EMAIL", config.google.serviceAccountEmail],
-      ["GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", config.google.serviceAccountPrivateKey],
-      ["GOOGLE_PROJECT_ID", config.google.projectId],
-      ["GROUPME_GROUP_ID", config.groupme.groupId],
-      ["GROUPME_ACCESS_TOKEN", config.groupme.accessToken],
-      ["COLUMN_NAME", config.sync.columnName],
-      ["COLUMN_EMAIL", config.sync.columnEmail],
-      ["COLUMN_PHONE", config.sync.columnPhone],
-      ["FLY_REGION", config.deployment.flyRegion],
-      ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
-    ])
-  );
-
-const createTestConfig = (): TestConfig => ({
-  google: {
-    sheetId: "test-sheet-id",
-    serviceAccountEmail: "test@example.iam.gserviceaccount.com",
-    serviceAccountPrivateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-    projectId: "test-project",
-  },
-  groupme: { groupId: "test-group-id", accessToken: "test-token" },
-  sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: {
-    flyRegion: "sfo",
-    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
-  },
-});
-
-const testLayer = (config: TestConfig) =>
-  GroupMeService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
-  );
 
 describe("GroupMeService", () => {
   describe("addMember", () => {
@@ -91,7 +44,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should handle already_member response (409)", () => {
@@ -127,7 +80,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should handle 401 unauthorized error", () => {
@@ -155,7 +108,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should handle generic API error", () => {
@@ -183,7 +136,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should use default groupId from config when empty string provided", () => {
@@ -216,7 +169,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
   });
 
@@ -251,7 +204,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should return empty array when no members", () => {
@@ -272,7 +225,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should handle 401 unauthorized error", () => {
@@ -297,7 +250,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
   });
 
@@ -330,7 +283,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should return GroupMeUnauthorizedError on 401", () => {
@@ -357,7 +310,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should return GroupMeApiError on other failures", () => {
@@ -382,7 +335,7 @@ describe("GroupMeService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
   });
 

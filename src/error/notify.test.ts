@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "@effect/vitest";
 import { Config, ConfigProvider, Effect, Layer, Option } from "effect";
+import { type TestConfig, createTestConfig } from "../test/config";
+import { createNotifyTestLayer } from "../test/helpers";
 import {
   DiscordEmbed,
   DiscordEmbedField,
@@ -7,55 +9,6 @@ import {
   NotificationError,
   NotifyService,
 } from "./notify";
-
-interface TestConfig {
-  google: {
-    sheetId: string;
-    serviceAccountEmail: string;
-    serviceAccountPrivateKey: string;
-    projectId: string;
-  };
-  groupme: { groupId: string; accessToken: string };
-  sync: { columnName: string; columnEmail: string; columnPhone: string };
-  deployment: { flyRegion: string; discordWebhookUrl: string };
-}
-
-const createTestConfigProvider = (config: TestConfig) =>
-  ConfigProvider.fromMap(
-    new Map([
-      ["GOOGLE_SHEET_ID", config.google.sheetId],
-      ["GOOGLE_SERVICE_ACCOUNT_EMAIL", config.google.serviceAccountEmail],
-      ["GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", config.google.serviceAccountPrivateKey],
-      ["GOOGLE_PROJECT_ID", config.google.projectId],
-      ["GROUPME_GROUP_ID", config.groupme.groupId],
-      ["GROUPME_ACCESS_TOKEN", config.groupme.accessToken],
-      ["COLUMN_NAME", config.sync.columnName],
-      ["COLUMN_EMAIL", config.sync.columnEmail],
-      ["COLUMN_PHONE", config.sync.columnPhone],
-      ["FLY_REGION", config.deployment.flyRegion],
-      ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
-    ])
-  );
-
-const createTestConfig = (): TestConfig => ({
-  google: {
-    sheetId: "test-sheet-id",
-    serviceAccountEmail: "test@example.iam.gserviceaccount.com",
-    serviceAccountPrivateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-    projectId: "test-project",
-  },
-  groupme: { groupId: "test-group-id", accessToken: "test-token" },
-  sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: {
-    flyRegion: "sfo",
-    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
-  },
-});
-
-const testLayer = (config: TestConfig) =>
-  NotifyService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
-  );
 
 describe("NotifyService", () => {
   describe("Schema classes", () => {
@@ -163,7 +116,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
 
     it.effect("should handle non-Error objects", () => {
@@ -186,7 +139,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
 
     it.effect("should return NotificationError on Discord API failure", () => {
@@ -212,7 +165,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
 
     it.effect("should return NotificationError on network failure", () => {
@@ -235,7 +188,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
   });
 
@@ -272,7 +225,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
 
     it.effect("should send success notification with yellow color when errors exist", () => {
@@ -295,7 +248,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
 
     it.effect("should return NotificationError on Discord API failure", () => {
@@ -323,7 +276,7 @@ describe("NotifyService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
     });
   });
 });
@@ -358,7 +311,7 @@ describe("NotifyService Integration", () => {
       }
       const webhookUrl = maybeWebhookUrl.value;
       const service = yield* NotifyService.pipe(
-        Effect.provide(testLayer(integrationConfig(webhookUrl)))
+        Effect.provide(createNotifyTestLayer(integrationConfig(webhookUrl)))
       );
       yield* service.notifyError(new Error("[TEST] Integration test error - please ignore"));
     })
@@ -372,7 +325,7 @@ describe("NotifyService Integration", () => {
       }
       const webhookUrl = maybeWebhookUrl.value;
       const service = yield* NotifyService.pipe(
-        Effect.provide(testLayer(integrationConfig(webhookUrl)))
+        Effect.provide(createNotifyTestLayer(integrationConfig(webhookUrl)))
       );
       yield* service.notifySuccess({ added: 10, skipped: 5, errors: 1 });
     })

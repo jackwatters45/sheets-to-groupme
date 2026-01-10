@@ -1,18 +1,16 @@
 import { describe, expect, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer } from "effect";
+import { Effect } from "effect";
 import { vi } from "vitest";
 
-// Create hoisted mock for google-auth-library
-const mockJWT = vi.hoisted(() => {
-  return class MockJWT {
-    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
-  };
-});
-
+// Hoisted mock for google-auth-library (must be before imports that use it)
 vi.mock("google-auth-library", () => ({
-  JWT: mockJWT,
+  JWT: class MockJWT {
+    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
+  },
 }));
 
+import { createTestConfig } from "../test/config";
+import { createGoogleTestLayer } from "../test/helpers";
 import {
   ColumnMappingError,
   GoogleAuthError,
@@ -20,55 +18,6 @@ import {
   extractUserContacts,
   findColumnIndices,
 } from "./client";
-
-interface TestConfig {
-  google: {
-    sheetId: string;
-    serviceAccountEmail: string;
-    serviceAccountPrivateKey: string;
-    projectId: string;
-  };
-  groupme: { groupId: string; accessToken: string };
-  sync: { columnName: string; columnEmail: string; columnPhone: string };
-  deployment: { flyRegion: string; discordWebhookUrl: string };
-}
-
-const createTestConfigProvider = (config: TestConfig) =>
-  ConfigProvider.fromMap(
-    new Map([
-      ["GOOGLE_SHEET_ID", config.google.sheetId],
-      ["GOOGLE_SERVICE_ACCOUNT_EMAIL", config.google.serviceAccountEmail],
-      ["GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", config.google.serviceAccountPrivateKey],
-      ["GOOGLE_PROJECT_ID", config.google.projectId],
-      ["GROUPME_GROUP_ID", config.groupme.groupId],
-      ["GROUPME_ACCESS_TOKEN", config.groupme.accessToken],
-      ["COLUMN_NAME", config.sync.columnName],
-      ["COLUMN_EMAIL", config.sync.columnEmail],
-      ["COLUMN_PHONE", config.sync.columnPhone],
-      ["FLY_REGION", config.deployment.flyRegion],
-      ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
-    ])
-  );
-
-const createTestConfig = (): TestConfig => ({
-  google: {
-    sheetId: "test-sheet-id",
-    serviceAccountEmail: "test@example.iam.gserviceaccount.com",
-    serviceAccountPrivateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-    projectId: "test-project",
-  },
-  groupme: { groupId: "test-group", accessToken: "test-token" },
-  sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: {
-    flyRegion: "sfo",
-    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
-  },
-});
-
-const testLayer = (config: TestConfig) =>
-  GoogleSheetsService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
-  );
 
 describe("GoogleSheetsService", () => {
   describe("unit tests", () => {
@@ -114,7 +63,7 @@ describe("GoogleSheetsService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should return empty array when no values", () => {
@@ -135,7 +84,7 @@ describe("GoogleSheetsService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should fail when Sheets API returns error", () => {
@@ -159,7 +108,7 @@ describe("GoogleSheetsService", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
   });
 
@@ -326,7 +275,7 @@ describe("GoogleSheetsService", () => {
         expect(result[0].name).toBe("John Doe");
         expect(result[0].email).toBe("john@example.com");
         expect(result[0].phone).toBe("555-1234");
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should return empty array for empty rows", () => {
@@ -341,7 +290,7 @@ describe("GoogleSheetsService", () => {
           phone: "Phone",
         });
         expect(result).toEqual([]);
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should fail when name column is missing", () => {
@@ -361,7 +310,7 @@ describe("GoogleSheetsService", () => {
           expect(result.left).toBeInstanceOf(ColumnMappingError);
           expect((result.left as ColumnMappingError).column).toBe("Name");
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should fail when multiple columns are missing", () => {
@@ -379,7 +328,7 @@ describe("GoogleSheetsService", () => {
           // The first missing column should be reported
           expect(["Name", "Email", "Phone"]).toContain((result.left as ColumnMappingError).column);
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should handle case-insensitive column matching", () => {
@@ -398,7 +347,7 @@ describe("GoogleSheetsService", () => {
         });
         expect(result).toHaveLength(1);
         expect(result[0].name).toBe("John Doe");
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
   });
 });

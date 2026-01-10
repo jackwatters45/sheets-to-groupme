@@ -1,16 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
-import { ConfigProvider, Cron, Effect, Layer } from "effect";
+import { Cron, Effect, Layer } from "effect";
 import { vi } from "vitest";
 
-// Create hoisted mock for google-auth-library
-const mockJWT = vi.hoisted(() => {
-  return class MockJWT {
-    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
-  };
-});
-
+// Hoisted mock for google-auth-library (must be before imports that use it)
 vi.mock("google-auth-library", () => ({
-  JWT: mockJWT,
+  JWT: class MockJWT {
+    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
+  },
 }));
 
 import { NotificationError, NotifyService } from "../error/notify";
@@ -18,62 +14,9 @@ import { ColumnMappingError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
 import { StateError } from "../state/store";
 import { SyncService } from "../sync/sync";
+import { createTestConfig } from "../test/config";
+import { createGoogleTestLayer, createGroupMeTestLayer } from "../test/helpers";
 import { CronService, runHourlySync } from "./cron";
-
-// Test config
-interface TestConfig {
-  google: {
-    sheetId: string;
-    serviceAccountEmail: string;
-    serviceAccountPrivateKey: string;
-    projectId: string;
-  };
-  groupme: { groupId: string; accessToken: string };
-  sync: { columnName: string; columnEmail: string; columnPhone: string };
-  deployment: { flyRegion: string; discordWebhookUrl: string };
-}
-
-const createTestConfigProvider = (config: TestConfig) =>
-  ConfigProvider.fromMap(
-    new Map([
-      ["GOOGLE_SHEET_ID", config.google.sheetId],
-      ["GOOGLE_SERVICE_ACCOUNT_EMAIL", config.google.serviceAccountEmail],
-      ["GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", config.google.serviceAccountPrivateKey],
-      ["GOOGLE_PROJECT_ID", config.google.projectId],
-      ["GROUPME_GROUP_ID", config.groupme.groupId],
-      ["GROUPME_ACCESS_TOKEN", config.groupme.accessToken],
-      ["COLUMN_NAME", config.sync.columnName],
-      ["COLUMN_EMAIL", config.sync.columnEmail],
-      ["COLUMN_PHONE", config.sync.columnPhone],
-      ["FLY_REGION", config.deployment.flyRegion],
-      ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
-    ])
-  );
-
-const createTestConfig = (): TestConfig => ({
-  google: {
-    sheetId: "test-sheet-id",
-    serviceAccountEmail: "test@example.iam.gserviceaccount.com",
-    serviceAccountPrivateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-    projectId: "test-project",
-  },
-  groupme: { groupId: "test-group-id", accessToken: "test-token" },
-  sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: {
-    flyRegion: "sfo",
-    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
-  },
-});
-
-const googleTestLayer = (config: TestConfig) =>
-  GoogleSheetsService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
-  );
-
-const groupmeTestLayer = (config: TestConfig) =>
-  GroupMeService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
-  );
 
 describe("Cron Scheduler", () => {
   describe("runHourlySync", () => {
@@ -395,7 +338,7 @@ describe("Cron Scheduler", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(googleTestLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should add member to GroupMe", () => {
@@ -428,7 +371,7 @@ describe("Cron Scheduler", () => {
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(groupmeTestLayer(testConfig)));
+      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
     });
 
     it.effect("should parse user contacts from rows", () => {
@@ -449,7 +392,7 @@ describe("Cron Scheduler", () => {
         expect(result).toHaveLength(2);
         expect(result[0].name).toBe("John Doe");
         expect(result[1].name).toBe("Jane Doe");
-      }).pipe(Effect.provide(googleTestLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should handle empty rows", () => {
@@ -464,7 +407,7 @@ describe("Cron Scheduler", () => {
           phone: "Phone",
         });
         expect(result).toEqual([]);
-      }).pipe(Effect.provide(googleTestLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
 
     it.effect("should fail when columns missing", () => {
@@ -483,7 +426,7 @@ describe("Cron Scheduler", () => {
         if (result._tag === "Left") {
           expect(result.left).toBeInstanceOf(ColumnMappingError);
         }
-      }).pipe(Effect.provide(googleTestLayer(testConfig)));
+      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
     });
   });
 });

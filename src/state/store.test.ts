@@ -233,4 +233,11 @@ describe("State Store", () => {
       expect(state.processedRows.size).toBe(3);
     });
   });
+
+  describe("StateService", () => {
+    it("should be defined as a service", () => {
+      expect(store.StateService).toBeDefined();
+      expect(store.StateService.Default).toBeDefined();
+    });
+  });
 });

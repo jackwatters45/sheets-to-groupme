@@ -10,11 +10,10 @@ import { fetchRows, parseUserContacts } from "../google/client";
 import { type GroupMeMember, addGroupMeMember } from "../groupme/client";
 import {
   type SyncState,
+  StateService,
   generateRowId,
   isDuplicateRow,
-  loadState,
   markRowAsProcessed,
-  saveState,
 } from "../state/store";
 
 export class SyncError extends Data.TaggedError("SyncError")<{
@@ -173,6 +172,7 @@ const processContacts = (
 export class SyncService extends Effect.Service<SyncService>()("SyncService", {
   effect: Effect.gen(function* () {
     const config = yield* AppConfig;
+    const stateService = yield* StateService;
 
     const run = Effect.gen(function* () {
       const startTime = Date.now();
@@ -215,7 +215,7 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
       yield* Effect.logInfo(`Found ${userContacts.length} user contacts`);
 
-      const currentState = yield* loadState();
+      const currentState = yield* stateService.load;
 
       const initialContext: ProcessingContext = {
         state: currentState,
@@ -233,7 +233,7 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
         config.groupme.groupId
       );
 
-      yield* saveState(finalContext.state);
+      yield* stateService.save(finalContext.state);
 
       const duration = Date.now() - startTime;
       yield* Effect.logInfo(
@@ -252,14 +252,5 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
     return { run };
   }),
-  dependencies: [],
+  dependencies: [StateService.Default],
 }) {}
-
-/**
- * Convenience effect that runs the sync.
- * Requires SyncService to be provided.
- */
-export const runSync = Effect.gen(function* () {
-  const syncService = yield* SyncService;
-  return yield* syncService.run;
-});

@@ -16,40 +16,74 @@ bun run format        # Format code with Biome
 
 Run a single test file:
 ```bash
-bun run test src/google/client.test.ts
-```
-
-Run tests with coverage:
-```bash
-bun run test --run --coverage
+bun run test src/sync/sync.test.ts
 ```
 
 ## Architecture
 
-This is an Effect-TS application that syncs Google Sheets contacts to GroupMe groups on an hourly schedule.
+Effect-TS application that syncs Google Sheets contacts to GroupMe groups on an hourly cron schedule.
+
+### Services
+
+All services use the `Effect.Service<T>()` class pattern with explicit dependencies:
+
+- **SyncService** (`src/sync/sync.ts`) - Orchestrates sync, depends on StateService
+- **StateService** (`src/state/store.ts`) - Persists processed rows to `data/state.json`
+- **NotifyService** (`src/error/notify.ts`) - Discord webhook notifications
+
+```typescript
+export class SyncService extends Effect.Service<SyncService>()("SyncService", {
+  effect: Effect.gen(function* () {
+    const config = yield* AppConfig;
+    const stateService = yield* StateService;  // Access dependencies in construction
+    return { run: Effect.gen(function* () { /* ... */ }) };
+  }),
+  dependencies: [StateService.Default],  // Declare layer dependencies
+}) {}
+```
+
+**Key patterns:**
+- Access dependencies during service construction, not inside methods
+- Use `dependencies: []` array to compose layers automatically
+- No convenience wrapper functions - access services directly via `yield* ServiceName`
 
 ### Data Flow
 
-1. **Scheduler** (`src/scheduler/cron.ts`) - Runs `runSync` every hour with graceful shutdown handling
-2. **Sync** (`src/sync/sync.ts`) - Orchestrates the sync: fetches sheets data, processes contacts, tracks state
-3. **Google Client** (`src/google/client.ts`) - Fetches rows from Google Sheets using service account JWT auth
-4. **GroupMe Client** (`src/groupme/client.ts`) - Adds members to GroupMe groups via REST API
-5. **State Store** (`src/state/store.ts`) - Persists processed rows to `data/state.json` to avoid duplicates
+1. **Scheduler** (`src/scheduler/cron.ts`) - Uses `Schedule.cron("0 * * * *")` for hourly execution
+2. **SyncService** - Fetches sheets data, processes contacts, tracks state
+3. **Google Client** (`src/google/client.ts`) - Fetches rows using service account JWT auth
+4. **GroupMe Client** (`src/groupme/client.ts`) - Adds members via REST API
 
 ### Effect Patterns
 
-- Uses `Effect.gen` generator syntax for effectful code
-- Errors are tagged classes extending `Data.TaggedError` (e.g., `GoogleAuthError`, `GroupMeApiError`)
-- Configuration via `Config.all` with environment variable bindings in `src/config.ts`
-- Schemas defined with `Schema.Class` pattern in `src/core/schema.ts`
-- Services use `Effect.Service` pattern (see `src/error/notify.ts`)
+**Errors** - Tagged classes extending `Data.TaggedError`:
+```typescript
+export class SyncError extends Data.TaggedError("SyncError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+```
 
-### Key Types
+**Schemas** - Use `Schema.Class` pattern:
+```typescript
+export class SyncResult extends Schema.Class<SyncResult>("SyncResult")({
+  added: Schema.Number,
+  skipped: Schema.Number,
+}) {}
+```
 
-- `UserContact` - Contact parsed from sheet row (name, optional email/phone)
-- `SyncState` - Tracks processed rows with SHA256 hash-based row IDs
-- `SyncResult` - Sync operation outcome with added/skipped/error counts
+**Config** - Via `Config.all` with environment bindings in `src/config.ts`
 
 ### Testing
 
-Tests use `@effect/vitest` with `Effect.gen` assertions. Test files are co-located with source files (`*.test.ts`).
+Uses `@effect/vitest` with `it.effect()` for Effect-based tests. Test files are co-located (`*.test.ts`).
+
+```typescript
+it.effect("should work", () =>
+  Effect.gen(function* () {
+    const service = yield* SyncService;
+    const result = yield* service.run;
+    expect(result.added).toBe(0);
+  }).pipe(Effect.provide(SyncService.Default))
+);
+```

@@ -1,35 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
-
-// Define interfaces that match sync.ts for testing
-interface UserContact {
-  name: string;
-  email?: string;
-  phone?: string;
-}
-
-interface SyncResultDetail {
-  rowId: string;
-  name: string;
-  status: "added" | "skipped" | "error" | "failed";
-  error?: string;
-  timestamp?: string;
-}
-
-interface SyncResultFailedRow {
-  rowId: string;
-  contact: UserContact;
-  error: string;
-  timestamp: string;
-}
-
-interface SyncResult {
-  added: number;
-  skipped: number;
-  errors: number;
-  duration: number;
-  details: SyncResultDetail[];
-  failedRows: SyncResultFailedRow[];
-}
+import type {
+  SyncResult,
+  SyncResultDetail,
+  SyncResultFailedRow,
+  UserContact,
+} from "../core/schema";
 
 interface ProcessedRow {
   rowId: string;

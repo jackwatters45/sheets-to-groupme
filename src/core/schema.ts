@@ -1,49 +1,21 @@
 import * as Schema from "effect/Schema";
 
-export interface UserContact {
-  name: string;
-  email?: string;
-  phone?: string;
-}
-
 /**
  * Effect Schema for UserContact validation.
  * Ensures name is required, email and phone are optional strings.
  */
-export const UserContactSchema: Schema.Schema<UserContact> = Schema.Struct({
+export const UserContactSchema = Schema.Struct({
   name: Schema.NonEmptyTrimmedString,
   email: Schema.optional(Schema.String.pipe(Schema.minLength(1))),
   phone: Schema.optional(Schema.String.pipe(Schema.minLength(1))),
 });
 
-export interface SyncResultDetail {
-  rowId: string;
-  name: string;
-  status: "added" | "skipped" | "error" | "failed";
-  error?: string;
-  timestamp?: string;
-}
-
-export interface SyncResultFailedRow {
-  rowId: string;
-  contact: UserContact;
-  error: string;
-  timestamp: string;
-}
-
-export interface SyncResult {
-  added: number;
-  skipped: number;
-  errors: number;
-  duration: number;
-  details: readonly SyncResultDetail[];
-  failedRows: readonly SyncResultFailedRow[];
-}
+export type UserContact = typeof UserContactSchema.Type;
 
 /**
  * Effect Schema for SyncResultDetail.
  */
-export const SyncResultDetailSchema: Schema.Schema<SyncResultDetail> = Schema.Struct({
+export const SyncResultDetailSchema = Schema.Struct({
   rowId: Schema.NonEmptyTrimmedString,
   name: Schema.NonEmptyTrimmedString,
   status: Schema.Union(
@@ -56,20 +28,24 @@ export const SyncResultDetailSchema: Schema.Schema<SyncResultDetail> = Schema.St
   timestamp: Schema.optional(Schema.String),
 });
 
+export type SyncResultDetail = typeof SyncResultDetailSchema.Type;
+
 /**
  * Effect Schema for SyncResultFailedRow.
  */
-export const SyncResultFailedRowSchema: Schema.Schema<SyncResultFailedRow> = Schema.Struct({
+export const SyncResultFailedRowSchema = Schema.Struct({
   rowId: Schema.NonEmptyTrimmedString,
   contact: UserContactSchema,
   error: Schema.NonEmptyTrimmedString,
   timestamp: Schema.NonEmptyTrimmedString,
 });
 
+export type SyncResultFailedRow = typeof SyncResultFailedRowSchema.Type;
+
 /**
  * Effect Schema for SyncResult validation.
  */
-export const SyncResultSchema: Schema.Schema<SyncResult> = Schema.Struct({
+export const SyncResultSchema = Schema.Struct({
   added: Schema.Number,
   skipped: Schema.Number,
   errors: Schema.Number,
@@ -78,19 +54,13 @@ export const SyncResultSchema: Schema.Schema<SyncResult> = Schema.Struct({
   failedRows: Schema.Array(SyncResultFailedRowSchema),
 });
 
+export type SyncResult = typeof SyncResultSchema.Type;
+
 /**
- * Type guard for UserContact compatibility.
- * Useful for runtime checks before schema validation.
+ * Type guard for UserContact compatibility using schema.
  */
-export const UserContact = {
-  is: (value: unknown): value is UserContact => {
-    return (
-      typeof value === "object" &&
-      value !== null &&
-      "name" in value &&
-      typeof (value as UserContact).name === "string"
-    );
-  },
+export const isUserContact = (value: unknown): value is UserContact => {
+  return Schema.is(UserContactSchema)(value);
 };
 
 /**
@@ -115,5 +85,5 @@ export const validateRowData = (
     name,
     email: email || undefined,
     phone: phone || undefined,
-  };
+  } as UserContact;
 };

@@ -88,14 +88,14 @@ describe("UserContact Schema", () => {
     });
   });
 
-  describe("UserContact.is type guard", () => {
+  describe("isUserContact type guard", () => {
     it("should return true for valid UserContact", () => {
       const contact: schema.UserContact = {
         name: "John Doe",
         email: "john@example.com",
       };
 
-      expect(schema.UserContact.is(contact)).toBe(true);
+      expect(schema.isUserContact(contact)).toBe(true);
     });
 
     it("should return true for minimal UserContact", () => {
@@ -103,24 +103,24 @@ describe("UserContact Schema", () => {
         name: "John Doe",
       };
 
-      expect(schema.UserContact.is(contact)).toBe(true);
+      expect(schema.isUserContact(contact)).toBe(true);
     });
 
     it("should return false for null", () => {
-      expect(schema.UserContact.is(null)).toBe(false);
+      expect(schema.isUserContact(null)).toBe(false);
     });
 
     it("should return false for non-objects", () => {
-      expect(schema.UserContact.is("string")).toBe(false);
-      expect(schema.UserContact.is(123)).toBe(false);
+      expect(schema.isUserContact("string")).toBe(false);
+      expect(schema.isUserContact(123)).toBe(false);
     });
 
     it("should return false for objects without name", () => {
-      expect(schema.UserContact.is({ email: "test@example.com" })).toBe(false);
+      expect(schema.isUserContact({ email: "test@example.com" })).toBe(false);
     });
 
     it("should return false for objects with non-string name", () => {
-      expect(schema.UserContact.is({ name: 123 })).toBe(false);
+      expect(schema.isUserContact({ name: 123 })).toBe(false);
     });
   });
 });

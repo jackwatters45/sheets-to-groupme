@@ -1,32 +1,38 @@
-import { Effect } from "effect";
+import { Data, Effect, Schema } from "effect";
 import { AppConfig } from "../config";
 
-export interface DiscordWebhookPayload {
-  content?: string;
-  username?: string;
-  avatar_url?: string;
-  embeds?: Array<{
-    title?: string;
-    description?: string;
-    color?: number;
-    fields?: Array<{ name: string; value: string; inline?: boolean }>;
-    timestamp?: string;
-  }>;
-}
+// Schema definitions for Discord webhook payload
+export class DiscordEmbedField extends Schema.Class<DiscordEmbedField>("DiscordEmbedField")({
+  name: Schema.String,
+  value: Schema.String,
+  inline: Schema.optional(Schema.Boolean),
+}) {}
 
-export class NotificationError extends Error {
-  readonly _tag = "NotificationError";
-}
+export class DiscordEmbed extends Schema.Class<DiscordEmbed>("DiscordEmbed")({
+  title: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.String),
+  color: Schema.optional(Schema.Number),
+  fields: Schema.optional(Schema.Array(DiscordEmbedField)),
+  timestamp: Schema.optional(Schema.String),
+}) {}
 
-interface NotifyService {
-  notifyError: (error: unknown) => Effect.Effect<void, NotificationError>;
-  notifySuccess: (summary: { added: number; skipped: number; errors: number }) => Effect.Effect<
-    void,
-    NotificationError
-  >;
-}
+export class DiscordWebhookPayload extends Schema.Class<DiscordWebhookPayload>(
+  "DiscordWebhookPayload"
+)({
+  content: Schema.optional(Schema.String),
+  username: Schema.optional(Schema.String),
+  avatar_url: Schema.optional(Schema.String),
+  embeds: Schema.optional(Schema.Array(DiscordEmbed)),
+}) {}
 
-export const NotifyService = Effect.Service<NotifyService>()("NotifyService", {
+// Error definition using Data.TaggedError
+export class NotificationError extends Data.TaggedError("NotificationError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+// Notification service
+export class NotifyService extends Effect.Service<NotifyService>()("NotifyService", {
   effect: Effect.gen(function* () {
     const config = yield* AppConfig;
 
@@ -43,9 +49,10 @@ export const NotifyService = Effect.Service<NotifyService>()("NotifyService", {
           }
         },
         catch: (e) =>
-          new NotificationError(
-            e instanceof Error ? e.message : "Failed to send Discord notification"
-          ),
+          new NotificationError({
+            message: e instanceof Error ? e.message : "Failed to send Discord notification",
+            cause: e,
+          }),
       });
 
     return {
@@ -54,49 +61,62 @@ export const NotifyService = Effect.Service<NotifyService>()("NotifyService", {
           const errorMessage = error instanceof Error ? error.message : String(error);
           const timestamp = new Date().toISOString();
 
-          const payload: DiscordWebhookPayload = {
+          const payload = new DiscordWebhookPayload({
             username: "Sheets to GroupMe",
             avatar_url: "https://i.imgur.com/AfFp7pu.png",
             embeds: [
-              {
+              new DiscordEmbed({
                 title: "Sync Error",
                 description: errorMessage,
                 color: 0xff4444,
-                fields: [{ name: "Time", value: timestamp, inline: true }],
+                fields: [new DiscordEmbedField({ name: "Time", value: timestamp, inline: true })],
                 timestamp,
-              },
+              }),
             ],
-          };
+          });
 
           yield* sendWebhook(payload);
           yield* Effect.logInfo("Error notification sent to Discord");
         }),
 
-      notifySuccess: (summary: { added: number; skipped: number; errors: number }): Effect.Effect<
-        void,
-        NotificationError
-      > =>
+      notifySuccess: (summary: {
+        added: number;
+        skipped: number;
+        errors: number;
+      }): Effect.Effect<void, NotificationError> =>
         Effect.gen(function* () {
           const timestamp = new Date().toISOString();
           const color = summary.errors > 0 ? 0xffaa00 : 0x44ff44;
 
-          const payload: DiscordWebhookPayload = {
+          const payload = new DiscordWebhookPayload({
             username: "Sheets to GroupMe",
             avatar_url: "https://i.imgur.com/AfFp7pu.png",
             embeds: [
-              {
+              new DiscordEmbed({
                 title: "Sync Complete",
                 description: `Added ${summary.added}, skipped ${summary.skipped}, errors ${summary.errors}`,
                 color,
                 fields: [
-                  { name: "Added", value: String(summary.added), inline: true },
-                  { name: "Skipped", value: String(summary.skipped), inline: true },
-                  { name: "Errors", value: String(summary.errors), inline: true },
+                  new DiscordEmbedField({
+                    name: "Added",
+                    value: String(summary.added),
+                    inline: true,
+                  }),
+                  new DiscordEmbedField({
+                    name: "Skipped",
+                    value: String(summary.skipped),
+                    inline: true,
+                  }),
+                  new DiscordEmbedField({
+                    name: "Errors",
+                    value: String(summary.errors),
+                    inline: true,
+                  }),
                 ],
                 timestamp,
-              },
+              }),
             ],
-          };
+          });
 
           yield* sendWebhook(payload);
           yield* Effect.logInfo("Success notification sent to Discord");
@@ -104,4 +124,4 @@ export const NotifyService = Effect.Service<NotifyService>()("NotifyService", {
     };
   }),
   dependencies: [],
-});
+}) {}

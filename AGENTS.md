@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md - Sheets to GroupMe Integration
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This document provides guidance for AI coding agents working on this codebase.
 
 ## Project Overview
 
@@ -21,8 +21,9 @@ bun run check              # Full biome check (format + lint + imports)
 # Run the application
 bun run src/main.ts        # Run main entry point
 
-# Testing
-bun run test               # Run all tests
+# Testing (IMPORTANT: use `bun run test`, NOT `bun test`)
+bun run test               # Run vitest (correct way)
+# Note: `bun test` uses Bun's native runner which has @effect/vitest compatibility issues
 ```
 
 **Before committing, ALWAYS run:**

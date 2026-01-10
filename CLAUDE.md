@@ -21,8 +21,9 @@ bun run check              # Full biome check (format + lint + imports)
 # Run the application
 bun run src/main.ts        # Run main entry point
 
-# Testing (when implemented)
-bun test                   # Run all tests
+# Testing (IMPORTANT: use `bun run test`, NOT `bun test`)
+bun run test               # Run vitest (correct way)
+# Note: `bun test` uses Bun's native runner which has @effect/vitest compatibility issues
 ```
 
 **Before committing, ALWAYS run:**

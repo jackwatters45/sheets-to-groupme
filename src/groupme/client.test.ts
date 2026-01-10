@@ -11,7 +11,7 @@ interface TestConfig {
   };
   groupme: { groupId: string; accessToken: string };
   sync: { columnName: string; columnEmail: string; columnPhone: string };
-  deployment: { flyRegion: string };
+  deployment: { flyRegion: string; discordWebhookUrl: string };
 }
 
 const createTestConfigProvider = (config: TestConfig) =>
@@ -27,6 +27,7 @@ const createTestConfigProvider = (config: TestConfig) =>
       ["COLUMN_EMAIL", config.sync.columnEmail],
       ["COLUMN_PHONE", config.sync.columnPhone],
       ["FLY_REGION", config.deployment.flyRegion],
+      ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
     ])
   );
 
@@ -39,7 +40,7 @@ const createTestConfig = (): TestConfig => ({
   },
   groupme: { groupId: "test-group-id", accessToken: "test-token" },
   sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: { flyRegion: "sfo" },
+  deployment: { flyRegion: "sfo", discordWebhookUrl: "https://discord.com/api/webhooks/test/token" },
 });
 
 const testLayer = (config: TestConfig) => Layer.setConfigProvider(createTestConfigProvider(config));

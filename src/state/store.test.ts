@@ -1,4 +1,8 @@
+import * as NodeFs from "node:fs/promises";
+import * as NodePath from "node:path";
 import { describe, expect, it } from "@effect/vitest";
+import { Effect } from "effect";
+import { afterEach, beforeEach } from "vitest";
 import * as store from "./store";
 
 // Helper to create mock state
@@ -234,5 +238,158 @@ describe("State Store", () => {
       expect(store.StateService).toBeDefined();
       expect(store.StateService.Default).toBeDefined();
     });
+  });
+
+  describe("StateService integration", () => {
+    const testDataDir = NodePath.join(process.cwd(), "data");
+    const testStatePath = NodePath.join(testDataDir, "state.json");
+
+    beforeEach(async () => {
+      // Ensure clean test state
+      try {
+        await NodeFs.rm(testStatePath, { force: true });
+      } catch {
+        // File may not exist, that's fine
+      }
+    });
+
+    afterEach(async () => {
+      // Clean up test state
+      try {
+        await NodeFs.rm(testStatePath, { force: true });
+      } catch {
+        // File may not exist, that's fine
+      }
+    });
+
+    it.effect("should load empty state when file does not exist", () =>
+      Effect.gen(function* () {
+        const service = yield* store.StateService;
+        const state = yield* service.load;
+
+        expect(state.lastRun).toBeNull();
+        expect(state.processedRows.size).toBe(0);
+      }).pipe(Effect.provide(store.StateService.Default))
+    );
+
+    it.effect("should save and load state correctly", () =>
+      Effect.gen(function* () {
+        const service = yield* store.StateService;
+
+        // Create and save state
+        const stateToSave: store.SyncState = {
+          lastRun: "2024-01-15T10:30:00.000Z",
+          processedRows: new Map([
+            ["row1", { rowId: "row1", timestamp: "2024-01-15T10:30:00.000Z", success: true }],
+            ["row2", { rowId: "row2", timestamp: "2024-01-15T10:31:00.000Z", success: false }],
+          ]),
+        };
+
+        yield* service.save(stateToSave);
+
+        // Load and verify
+        const loadedState = yield* service.load;
+
+        expect(loadedState.lastRun).toBe("2024-01-15T10:30:00.000Z");
+        expect(loadedState.processedRows.size).toBe(2);
+        expect(loadedState.processedRows.get("row1")?.success).toBe(true);
+        expect(loadedState.processedRows.get("row2")?.success).toBe(false);
+      }).pipe(Effect.provide(store.StateService.Default))
+    );
+
+    it.effect("should overwrite existing state on save", () =>
+      Effect.gen(function* () {
+        const service = yield* store.StateService;
+
+        // Save initial state
+        const initialState: store.SyncState = {
+          lastRun: "2024-01-01T00:00:00.000Z",
+          processedRows: new Map([
+            ["old-row", { rowId: "old-row", timestamp: "2024-01-01T00:00:00.000Z", success: true }],
+          ]),
+        };
+        yield* service.save(initialState);
+
+        // Save new state
+        const newState: store.SyncState = {
+          lastRun: "2024-01-15T12:00:00.000Z",
+          processedRows: new Map([
+            ["new-row", { rowId: "new-row", timestamp: "2024-01-15T12:00:00.000Z", success: true }],
+          ]),
+        };
+        yield* service.save(newState);
+
+        // Load and verify new state
+        const loadedState = yield* service.load;
+
+        expect(loadedState.lastRun).toBe("2024-01-15T12:00:00.000Z");
+        expect(loadedState.processedRows.size).toBe(1);
+        expect(loadedState.processedRows.has("new-row")).toBe(true);
+        expect(loadedState.processedRows.has("old-row")).toBe(false);
+      }).pipe(Effect.provide(store.StateService.Default))
+    );
+
+    it.effect("should create data directory if it does not exist", () =>
+      Effect.gen(function* () {
+        const service = yield* store.StateService;
+
+        // Save state (should create directory)
+        const state: store.SyncState = {
+          lastRun: "2024-01-15T10:00:00.000Z",
+          processedRows: new Map(),
+        };
+        yield* service.save(state);
+
+        // Verify file exists
+        const fileExists = yield* Effect.promise(() =>
+          NodeFs.access(testStatePath)
+            .then(() => true)
+            .catch(() => false)
+        );
+        expect(fileExists).toBe(true);
+      }).pipe(Effect.provide(store.StateService.Default))
+    );
+
+    it.effect("should handle empty processedRows", () =>
+      Effect.gen(function* () {
+        const service = yield* store.StateService;
+
+        const state: store.SyncState = {
+          lastRun: "2024-01-15T10:00:00.000Z",
+          processedRows: new Map(),
+        };
+        yield* service.save(state);
+
+        const loadedState = yield* service.load;
+        expect(loadedState.processedRows.size).toBe(0);
+        expect(loadedState.lastRun).toBe("2024-01-15T10:00:00.000Z");
+      }).pipe(Effect.provide(store.StateService.Default))
+    );
+
+    it.effect("should preserve row data through save/load cycle", () =>
+      Effect.gen(function* () {
+        const service = yield* store.StateService;
+
+        const row: store.ProcessedRow = {
+          rowId: "test-row-123",
+          timestamp: "2024-01-15T14:30:45.123Z",
+          success: true,
+        };
+
+        const state: store.SyncState = {
+          lastRun: "2024-01-15T14:30:45.123Z",
+          processedRows: new Map([[row.rowId, row]]),
+        };
+
+        yield* service.save(state);
+        const loadedState = yield* service.load;
+
+        const loadedRow = loadedState.processedRows.get("test-row-123");
+        expect(loadedRow).toBeDefined();
+        expect(loadedRow?.rowId).toBe(row.rowId);
+        expect(loadedRow?.timestamp).toBe(row.timestamp);
+        expect(loadedRow?.success).toBe(row.success);
+      }).pipe(Effect.provide(store.StateService.Default))
+    );
   });
 });

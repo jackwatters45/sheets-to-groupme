@@ -82,6 +82,11 @@ export class StateService extends Effect.Service<StateService>()("StateService",
       yield* ensureDataDir;
       const statePath = NodePath.join(dataDir, STATE_FILE_NAME);
 
+      const emptyState: SyncState = {
+        lastRun: null,
+        processedRows: new Map<string, ProcessedRow>(),
+      };
+
       const result = yield* Effect.tryPromise({
         try: async () => {
           const content = await NodeFs.readFile(statePath, "utf-8");
@@ -94,15 +99,8 @@ export class StateService extends Effect.Service<StateService>()("StateService",
             processedRows: new Map(Object.entries(parsed.processedRows || {})),
           };
         },
-        catch: () => null,
-      });
-
-      if (result === null) {
-        return {
-          lastRun: null,
-          processedRows: new Map<string, ProcessedRow>(),
-        };
-      }
+        catch: () => new StateError({ message: "File not found or invalid" }),
+      }).pipe(Effect.catchAll(() => Effect.succeed(emptyState)));
 
       return result;
     });

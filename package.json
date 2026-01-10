@@ -1,0 +1,35 @@
+{
+  "name": "sheets-to-groupme",
+  "version": "0.1.0",
+  "description": "Automate adding members to GroupMe from Google Sheets",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check .",
+    "start": "bun run src/main.ts",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "effect-language-service patch"
+  },
+  "dependencies": {
+    "@google-cloud/local-auth": "^3.0.0",
+    "effect": "^3.19.14",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^140.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@effect/language-service": "^0.64.1",
+    "@effect/vitest": "^0.27.0",
+    "@vitest/coverage-v8": "^4.0.16",
+    "bun-types": "^1.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

@@ -391,5 +391,60 @@
       "Add cron scheduler tests for syncOnce (cron.ts at 25%)",
       "Verify coverage meets 60% threshold"
     ]
+  },
+  {
+    "id": "TEST-FIX-AUTH",
+    "category": "test",
+    "description": "Fix GoogleAuthService mocking for fetchRows tests",
+    "passes": false,
+    "steps": [
+      "Create proper GoogleAuthService mock with _tag property",
+      "Unskip 4 tests in google/client.test.ts",
+      "Verify fetchRows success, empty values, auth failure, and API error tests pass"
+    ]
+  },
+  {
+    "id": "TEST-FIX-SYNC",
+    "category": "test",
+    "description": "Fix SyncService tests with mocked dependencies",
+    "passes": false,
+    "steps": [
+      "Mock GoogleAuthService for SyncService tests",
+      "Unskip 2 tests in sync/sync.test.ts",
+      "Verify empty rows and no valid contacts tests pass"
+    ]
+  },
+  {
+    "id": "TEST-FIX-CRON",
+    "category": "test",
+    "description": "Fix cron scheduler integration test",
+    "passes": false,
+    "steps": [
+      "Mock GoogleAuthService for cron integration test",
+      "Unskip 1 test in scheduler/cron.test.ts",
+      "Verify Google Sheets fetch integration test passes"
+    ]
+  },
+  {
+    "id": "TEST-FIX-STATE",
+    "category": "test",
+    "description": "Fix state store crypto.subtle tests",
+    "passes": false,
+    "steps": [
+      "Mock or polyfill crypto.subtle for test environment",
+      "Unskip 5 tests in state/store.test.ts",
+      "Verify generateRowId SHA256 hash tests pass"
+    ]
+  },
+  {
+    "id": "TEST-COVERAGE-RESTORE",
+    "category": "test",
+    "description": "Restore test coverage to meet 60% threshold",
+    "passes": false,
+    "steps": [
+      "Run coverage report after fixing all skipped tests",
+      "Add additional tests if coverage still below threshold",
+      "Verify lines >= 60%, functions >= 55%, branches >= 50%"
+    ]
   }
 ]

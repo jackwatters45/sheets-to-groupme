@@ -5,6 +5,7 @@
  * Run with cron scheduler for hourly syncs.
  */
 
+import { Effect } from "effect";
 import { runHourlySync } from "./scheduler/cron";
 
-runHourlySync().catch(console.error);
+Effect.runPromise(runHourlySync).catch(console.error);

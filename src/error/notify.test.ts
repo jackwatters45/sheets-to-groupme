@@ -328,7 +328,7 @@ describe("NotifyService", () => {
 describe("NotifyService Integration", () => {
   // These tests require a real Discord webhook URL set in DISCORD_WEBHOOK_URL_TEST env var
   // Run with: DISCORD_WEBHOOK_URL_TEST=https://discord.com/api/webhooks/... npm test
-  const testWebhookUrl = process.env.DISCORD_WEBHOOK_URL_TEST;
+  const testWebhookUrl = process.env["DISCORD_WEBHOOK_URL_TEST"];
 
   const integrationConfig = (): TestConfig => ({
     google: {

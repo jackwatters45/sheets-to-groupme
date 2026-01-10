@@ -1,58 +1,53 @@
-import { Effect } from "effect";
+import { Effect, Schedule, Cron, Console } from "effect";
 import { runSync } from "../sync/sync";
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
-
-let isShuttingDown = false;
-
-const shutdown = () => {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-  console.log("[INFO] Shutdown signal received, stopping cron...");
-};
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
+/**
+ * Cron expression for running every hour on the hour.
+ * Format: minute hour day-of-month month day-of-week
+ */
+const hourlyCron = Cron.unsafeParse("0 * * * *");
 
 /**
- * Run the sync job every hour.
+ * Schedule that triggers every hour on the hour.
+ */
+const hourlySchedule = Schedule.cron(hourlyCron);
+
+/**
+ * Run a single sync and log the result.
+ */
+const syncOnce = Effect.gen(function* () {
+  yield* Console.log("[INFO] Starting sync job...");
+  const result = yield* runSync;
+  yield* Console.log(
+    `[INFO] Sync complete: added=${result.added}, skipped=${result.skipped}, errors=${result.errors}, duration=${result.duration}ms`
+  );
+  return result;
+}).pipe(
+  Effect.catchAll((error) =>
+    Effect.gen(function* () {
+      yield* Console.error(
+        `[ERROR] Sync failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
+    })
+  )
+);
+
+/**
+ * Run the sync job every hour using Effect's cron scheduler.
  * This is the main entry point for the scheduled application.
  */
-export const runHourlySync = async (): Promise<void> => {
-  console.log(`[INFO] Starting cron scheduler with ${ONE_HOUR_MS}ms interval`);
+export const runHourlySync = Effect.gen(function* () {
+  yield* Console.log("[INFO] Starting cron scheduler (hourly at :00)");
 
-  const runOnce = async (): Promise<void> => {
-    try {
-      const result = await Effect.runPromise(runSync);
-      console.log("Sync complete", {
-        added: result.added,
-        skipped: result.skipped,
-        errors: result.errors,
-        duration: `${result.duration}ms`,
-      });
-    } catch (err) {
-      console.error("Sync failed", {
-        message: err instanceof Error ? err.message : "Unknown error",
-      });
-    }
-  };
+  // Run once immediately
+  yield* syncOnce;
 
-  await runOnce();
-
-  const intervalId = setInterval(async () => {
-    if (isShuttingDown) {
-      clearInterval(intervalId);
-      return;
-    }
-    await runOnce();
-  }, ONE_HOUR_MS);
-
-  while (!isShuttingDown) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  clearInterval(intervalId);
-  process.off("SIGTERM", shutdown);
-  process.off("SIGINT", shutdown);
-  console.log("[INFO] Cron scheduler stopped");
-};
+  // Then repeat on the hourly schedule
+  yield* syncOnce.pipe(
+    Effect.repeat(hourlySchedule),
+    Effect.catchAllCause((cause) =>
+      Console.error(`[ERROR] Scheduler stopped unexpectedly: ${cause}`)
+    )
+  );
+}).pipe(Effect.interruptible);

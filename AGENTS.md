@@ -1,6 +1,6 @@
-# AGENTS.md - Sheets to GroupMe Integration
+# CLAUDE.md
 
-This document provides guidance for AI coding agents working on this codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -21,8 +21,8 @@ bun run check              # Full biome check (format + lint + imports)
 # Run the application
 bun run src/main.ts        # Run main entry point
 
-# Testing (when implemented)
-bun test                   # Run all tests
+# Testing
+bun run test               # Run all tests
 ```
 
 **Before committing, ALWAYS run:**
@@ -229,9 +229,13 @@ When adding tests:
 import { it, expect } from "@effect/vitest";
 import { Effect } from "effect";
 
-it("should fetch rows", () => {
-  expect(true).toBe(true);
-});
+it.effect("should work", () =>
+  Effect.gen(function* () {
+    const service = yield* SyncService;
+    const result = yield* service.run;
+    expect(result.added).toBe(0);
+  }).pipe(Effect.provide(SyncService.Default)),
+);
 ```
 
 ## Effect Framework Notes

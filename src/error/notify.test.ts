@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer } from "effect";
+import { Config, ConfigProvider, Effect, Layer, Option } from "effect";
 import {
   DiscordEmbed,
   DiscordEmbedField,
@@ -46,7 +46,10 @@ const createTestConfig = (): TestConfig => ({
   },
   groupme: { groupId: "test-group-id", accessToken: "test-token" },
   sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: { flyRegion: "sfo", discordWebhookUrl: "https://discord.com/api/webhooks/test/token" },
+  deployment: {
+    flyRegion: "sfo",
+    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
+  },
 });
 
 const testLayer = (config: TestConfig) =>
@@ -326,11 +329,16 @@ describe("NotifyService", () => {
 });
 
 describe("NotifyService Integration", () => {
-  // These tests require a real Discord webhook URL set in DISCORD_WEBHOOK_URL_TEST env var
-  // Run with: DISCORD_WEBHOOK_URL_TEST=https://discord.com/api/webhooks/... npm test
-  const testWebhookUrl = process.env["DISCORD_WEBHOOK_URL_TEST"];
+  // These tests require DISCORD_WEBHOOK_URL_TEST env var
+  // Run with: DISCORD_WEBHOOK_URL_TEST=https://discord.com/api/webhooks/... bun test
 
-  const integrationConfig = (): TestConfig => ({
+  const testWebhookConfig = Config.option(Config.string("DISCORD_WEBHOOK_URL_TEST"));
+
+  const getTestWebhookUrl = Effect.gen(function* () {
+    return yield* testWebhookConfig;
+  }).pipe(Effect.provide(Layer.setConfigProvider(ConfigProvider.fromEnv())));
+
+  const integrationConfig = (webhookUrl: string): TestConfig => ({
     google: {
       sheetId: "test-sheet-id",
       serviceAccountEmail: "test@example.iam.gserviceaccount.com",
@@ -339,20 +347,34 @@ describe("NotifyService Integration", () => {
     },
     groupme: { groupId: "test-group-id", accessToken: "test-token" },
     sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-    deployment: { flyRegion: "sfo", discordWebhookUrl: testWebhookUrl || "" },
+    deployment: { flyRegion: "sfo", discordWebhookUrl: webhookUrl },
   });
 
-  it.effect.skipIf(!testWebhookUrl)("should send real error notification to Discord", () => {
-    return Effect.gen(function* () {
-      const service = yield* NotifyService;
+  it.effect("should send real error notification to Discord", () =>
+    Effect.gen(function* () {
+      const maybeWebhookUrl = yield* getTestWebhookUrl;
+      if (Option.isNone(maybeWebhookUrl)) {
+        return; // Skip if no test webhook URL configured
+      }
+      const webhookUrl = maybeWebhookUrl.value;
+      const service = yield* NotifyService.pipe(
+        Effect.provide(testLayer(integrationConfig(webhookUrl)))
+      );
       yield* service.notifyError(new Error("[TEST] Integration test error - please ignore"));
-    }).pipe(Effect.provide(testLayer(integrationConfig())));
-  });
+    })
+  );
 
-  it.effect.skipIf(!testWebhookUrl)("should send real success notification to Discord", () => {
-    return Effect.gen(function* () {
-      const service = yield* NotifyService;
+  it.effect("should send real success notification to Discord", () =>
+    Effect.gen(function* () {
+      const maybeWebhookUrl = yield* getTestWebhookUrl;
+      if (Option.isNone(maybeWebhookUrl)) {
+        return; // Skip if no test webhook URL configured
+      }
+      const webhookUrl = maybeWebhookUrl.value;
+      const service = yield* NotifyService.pipe(
+        Effect.provide(testLayer(integrationConfig(webhookUrl)))
+      );
       yield* service.notifySuccess({ added: 10, skipped: 5, errors: 1 });
-    }).pipe(Effect.provide(testLayer(integrationConfig())));
-  });
+    })
+  );
 });

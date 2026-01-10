@@ -40,7 +40,10 @@ const createTestConfig = (): TestConfig => ({
   },
   groupme: { groupId: "test-group-id", accessToken: "test-token" },
   sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-  deployment: { flyRegion: "sfo", discordWebhookUrl: "https://discord.com/api/webhooks/test/token" },
+  deployment: {
+    flyRegion: "sfo",
+    discordWebhookUrl: "https://discord.com/api/webhooks/test/token",
+  },
 });
 
 const testLayer = (config: TestConfig) => Layer.setConfigProvider(createTestConfigProvider(config));

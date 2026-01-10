@@ -4,13 +4,13 @@ import {
   SyncResult,
   SyncResultDetail,
   SyncResultFailedRow,
-  UserContact,
+  type UserContact,
 } from "../core/schema";
 import { fetchRows, parseUserContacts } from "../google/client";
 import { type GroupMeMember, addGroupMeMember } from "../groupme/client";
 import {
-  type SyncState,
   StateService,
+  type SyncState,
   generateRowId,
   isDuplicateRow,
   markRowAsProcessed,

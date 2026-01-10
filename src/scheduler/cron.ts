@@ -1,4 +1,4 @@
-import { Effect, Schedule, Cron, Console } from "effect";
+import { Console, Cron, Effect, Schedule } from "effect";
 import { SyncService } from "../sync/sync";
 
 /**

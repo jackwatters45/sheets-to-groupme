@@ -1,10 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import {
-  SyncResult,
-  SyncResultDetail,
-  SyncResultFailedRow,
-  UserContact,
-} from "../core/schema";
+import { SyncResult, SyncResultDetail, SyncResultFailedRow, UserContact } from "../core/schema";
 import { SyncError, SyncService } from "./sync";
 
 interface ProcessedRow {

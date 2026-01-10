@@ -1,13 +1,5 @@
 # Deployment Next Steps
 
-## Infisical Setup
-
-### 1. Create Infisical Account & Project
-
-1. Go to [app.infisical.com](https://app.infisical.com) and sign up
-2. Create a new project (e.g., `sheets-to-groupme`)
-3. Note your **Project ID** from the URL or project settings
-
 ### 2. Add Environment Variables
 
 In your Infisical project, add these secrets to the **Development** environment:

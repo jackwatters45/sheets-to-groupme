@@ -1,5 +1,5 @@
-import * as NodeFs from "node:fs/promises";
-import * as NodePath from "node:path";
+import { FileSystem, Path } from "@effect/platform";
+import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Data, Effect } from "effect";
 
 // Types
@@ -67,29 +67,32 @@ export const markRowAsProcessed = (
 // Service
 export class StateService extends Effect.Service<StateService>()("StateService", {
   effect: Effect.gen(function* () {
-    const dataDir = NodePath.join(process.cwd(), "data");
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const dataDir = path.join(process.cwd(), "data");
+    const statePath = path.join(dataDir, STATE_FILE_NAME);
 
-    const ensureDataDir = Effect.tryPromise({
-      try: async () => await NodeFs.mkdir(dataDir, { recursive: true }),
-      catch: (error) =>
-        new StateError({
-          message: error instanceof Error ? error.message : "Failed to create data directory",
-          cause: error,
-        }),
-    });
+    const ensureDataDir = fs.makeDirectory(dataDir, { recursive: true }).pipe(
+      Effect.catchAll((error) =>
+        Effect.fail(
+          new StateError({
+            message: error.message,
+            cause: error,
+          })
+        )
+      )
+    );
 
     const load = Effect.gen(function* () {
       yield* ensureDataDir;
-      const statePath = NodePath.join(dataDir, STATE_FILE_NAME);
 
       const emptyState: SyncState = {
         lastRun: null,
         processedRows: new Map<string, ProcessedRow>(),
       };
 
-      const result = yield* Effect.tryPromise({
-        try: async () => {
-          const content = await NodeFs.readFile(statePath, "utf-8");
+      const result = yield* fs.readFileString(statePath, "utf8").pipe(
+        Effect.map((content) => {
           const parsed = JSON.parse(content) as {
             lastRun: string | null;
             processedRows: Record<string, ProcessedRow>;
@@ -98,9 +101,9 @@ export class StateService extends Effect.Service<StateService>()("StateService",
             lastRun: parsed.lastRun,
             processedRows: new Map(Object.entries(parsed.processedRows || {})),
           };
-        },
-        catch: () => new StateError({ message: "File not found or invalid" }),
-      }).pipe(Effect.catchAll(() => Effect.succeed(emptyState)));
+        }),
+        Effect.catchAll(() => Effect.succeed(emptyState))
+      );
 
       return result;
     });
@@ -108,7 +111,6 @@ export class StateService extends Effect.Service<StateService>()("StateService",
     const save = (state: SyncState) =>
       Effect.gen(function* () {
         yield* ensureDataDir;
-        const statePath = NodePath.join(dataDir, STATE_FILE_NAME);
 
         const serialized = JSON.stringify(
           {
@@ -119,17 +121,19 @@ export class StateService extends Effect.Service<StateService>()("StateService",
           2
         );
 
-        yield* Effect.tryPromise({
-          try: async () => await NodeFs.writeFile(statePath, serialized, "utf-8"),
-          catch: (error) =>
-            new StateError({
-              message: error instanceof Error ? error.message : "Failed to write state file",
-              cause: error,
-            }),
-        });
+        yield* fs.writeFileString(statePath, serialized).pipe(
+          Effect.catchAll((error) =>
+            Effect.fail(
+              new StateError({
+                message: error.message,
+                cause: error,
+              })
+            )
+          )
+        );
       });
 
     return { load, save };
   }),
-  dependencies: [],
+  dependencies: [NodeFileSystem.layer, NodePath.layer],
 }) {}

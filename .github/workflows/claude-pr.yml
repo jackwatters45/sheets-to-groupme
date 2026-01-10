@@ -1,0 +1,309 @@
+name: Claude PR Assistant
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number"
+        required: true
+        type: number
+
+concurrency:
+  group: claude-pr-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  generate-description:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if PR needs title/description
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          echo "========== Checking PR State =========="
+          PR_DATA=$(gh pr view "$PR_NUMBER" --json title,body)
+          TITLE=$(echo "$PR_DATA" | jq -r '.title')
+          BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+          BODY_LENGTH=${#BODY}
+          echo "Current title: $TITLE"
+          echo "Body length: $BODY_LENGTH chars"
+          if echo "$TITLE" | grep -qE "^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)(\(.+\))?:"; then
+            echo "✅ Title has conventional commit prefix"
+            echo "needs_title=false" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Title needs conventional commit prefix"
+            echo "needs_title=true" >> $GITHUB_OUTPUT
+          fi
+          HAS_SUMMARY=$(echo "$BODY" | grep -c "## Summary" || true)
+          if [ "$BODY_LENGTH" -gt 100 ] && [ "$HAS_SUMMARY" -gt 0 ]; then
+            echo "✅ Body has description"
+            echo "needs_body=false" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Body needs description"
+            echo "needs_body=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get PR metadata
+        if: steps.check-pr.outputs.needs_title == 'true' || steps.check-pr.outputs.needs_body == 'true'
+        id: pr-meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          PR_DATA=$(gh pr view "$PR_NUMBER" --json headRefName,baseRefName,author,title)
+          echo "branch=$(echo "$PR_DATA" | jq -r '.headRefName')" >> $GITHUB_OUTPUT
+          echo "base=$(echo "$PR_DATA" | jq -r '.baseRefName')" >> $GITHUB_OUTPUT
+          echo "author=$(echo "$PR_DATA" | jq -r '.author.login')" >> $GITHUB_OUTPUT
+          echo "title=$(echo "$PR_DATA" | jq -r '.title')" >> $GITHUB_OUTPUT
+
+      - name: Get PR diff
+        if: steps.check-pr.outputs.needs_title == 'true' || steps.check-pr.outputs.needs_body == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          gh pr diff "$PR_NUMBER" > /tmp/pr-diff.txt 2>&1 || echo "Failed to get diff" > /tmp/pr-diff.txt
+          head -c 50000 /tmp/pr-diff.txt > /tmp/pr-diff-truncated.txt
+          echo "Diff size: $(wc -c < /tmp/pr-diff-truncated.txt) bytes"
+
+      - name: Claude - Generate PR content
+        if: steps.check-pr.outputs.needs_title == 'true' || steps.check-pr.outputs.needs_body == 'true'
+        id: claude-generate
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Analyze this PR and generate a title and description.
+
+            CONTEXT:
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ steps.pr-meta.outputs.branch }}
+            - Base: ${{ steps.pr-meta.outputs.base }}
+            - Current title: ${{ steps.pr-meta.outputs.title }}
+            - Needs new title: ${{ steps.check-pr.outputs.needs_title }}
+            - Needs new body: ${{ steps.check-pr.outputs.needs_body }}
+
+            INSTRUCTIONS:
+            1. Read /tmp/pr-diff-truncated.txt to understand the changes
+            2. Generate content and write to files:
+
+            If needs new title, write to /tmp/new-title.txt:
+            - Single line, conventional commit format
+            - Format: type(scope): description (max 72 chars)
+            - Types: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert
+            - IMPORTANT: Title must be all lowercase, EXCEPT for file names which keep exact case
+            - Examples: "fix: resolve null pointer in auth.ts", "feat(api): add user endpoint"
+
+            If needs new body, write to /tmp/new-body.txt:
+            - Use this exact format:
+
+            ## Summary
+            Brief 1-2 sentence summary.
+
+            ## Changes
+            - Key change 1
+            - Key change 2
+
+            ## Type
+            - [x] One type checked
+            - [ ] Bug fix
+            - [ ] New feature
+            - [ ] Refactor
+            - [ ] Documentation
+            - [ ] Tests
+            - [ ] Other
+
+            ## Notes
+            Additional context if any.
+
+            ---
+            *Auto-generated by Claude. Feel free to edit.*
+
+            3. After writing, output "DONE" to confirm completion.
+
+          claude_args: '--allowedTools "Read" --allowedTools "Write"'
+
+      - name: Apply PR updates
+        if: steps.check-pr.outputs.needs_title == 'true' || steps.check-pr.outputs.needs_body == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          BRANCH: ${{ steps.pr-meta.outputs.branch }}
+        run: |
+          echo "========== Applying PR Updates =========="
+
+          if [ -f /tmp/new-title.txt ]; then
+            NEW_TITLE=$(cat /tmp/new-title.txt | head -1 | tr -d '\n')
+            echo "Claude generated title: $NEW_TITLE"
+          elif [ "${{ steps.check-pr.outputs.needs_title }}" = "true" ]; then
+            echo "Claude didn't generate title, using fallback..."
+            if [[ "$BRANCH" == fix/* ]] || [[ "$BRANCH" == *fix* ]]; then
+              PREFIX="fix"
+            elif [[ "$BRANCH" == feat/* ]] || [[ "$BRANCH" == *feature* ]]; then
+              PREFIX="feat"
+            elif [[ "$BRANCH" == chore/* ]]; then
+              PREFIX="chore"
+            elif [[ "$BRANCH" == docs/* ]]; then
+              PREFIX="docs"
+            else
+              PREFIX="chore"
+            fi
+            CLEAN_BRANCH=$(echo "$BRANCH" | sed 's|^[^/]*/||' | tr '-' ' ' | tr '_' ' ' | tr '[:upper:]' '[:lower:]')
+            NEW_TITLE="${PREFIX}: ${CLEAN_BRANCH}"
+            echo "Fallback title: $NEW_TITLE"
+          fi
+
+          if [ -f /tmp/new-body.txt ]; then
+            echo "Claude generated body ($(wc -c < /tmp/new-body.txt) bytes)"
+            BODY_FILE="/tmp/new-body.txt"
+          elif [ "${{ steps.check-pr.outputs.needs_body }}" = "true" ]; then
+            echo "Claude didn't generate body, using fallback..."
+            printf '%s\n' "## Summary" "Automated PR description." "" "## Changes" "See files changed in this PR." "" "## Type" "- [ ] Bug fix" "- [ ] New feature" "- [ ] Refactor" "- [ ] Documentation" "- [ ] Tests" "- [x] Other" "" "## Notes" "Please review and update this description." "" "---" "*Auto-generated fallback.*" > /tmp/fallback-body.txt
+            BODY_FILE="/tmp/fallback-body.txt"
+          fi
+
+          if [ "${{ steps.check-pr.outputs.needs_title }}" = "true" ] && [ -n "$NEW_TITLE" ]; then
+            if [ "${{ steps.check-pr.outputs.needs_body }}" = "true" ] && [ -n "$BODY_FILE" ]; then
+              echo "Updating title and body..."
+              gh pr edit "$PR_NUMBER" --title "$NEW_TITLE" --body-file "$BODY_FILE"
+            else
+              echo "Updating title only..."
+              gh pr edit "$PR_NUMBER" --title "$NEW_TITLE"
+            fi
+          elif [ "${{ steps.check-pr.outputs.needs_body }}" = "true" ] && [ -n "$BODY_FILE" ]; then
+            echo "Updating body only..."
+            gh pr edit "$PR_NUMBER" --body-file "$BODY_FILE"
+          fi
+
+          echo ""
+          echo "========== Final PR State =========="
+          gh pr view "$PR_NUMBER" --json title,body | jq .
+
+  code-review:
+    needs: [generate-description]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Get PR info for review
+        id: pr-info
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          echo "========== Getting PR Info =========="
+          gh pr diff "$PR_NUMBER" > /tmp/pr-diff-review.txt 2>&1 || echo "No diff" > /tmp/pr-diff-review.txt
+          head -c 80000 /tmp/pr-diff-review.txt > /tmp/pr-diff-truncated.txt
+          gh pr view "$PR_NUMBER" --json title,body,files > /tmp/pr-meta.json
+          TITLE=$(gh pr view "$PR_NUMBER" --json title -q '.title')
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "PR Title: $TITLE"
+          echo "Diff size: $(wc -c < /tmp/pr-diff-truncated.txt) bytes"
+
+      - name: Claude - Generate review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request and write your review to a file.
+
+            CONTEXT:
+            - Repository: ${{ github.repository }}
+            - PR Title: ${{ steps.pr-info.outputs.title }}
+
+            INSTRUCTIONS:
+            1. Read /tmp/pr-diff-truncated.txt (the diff) and /tmp/pr-meta.json (metadata)
+
+            2. Analyze for:
+               - Code quality and best practices
+               - Potential bugs or issues
+               - Performance considerations
+               - Security concerns
+               - Test coverage
+               - Whether title follows conventional commit format (all lowercase except file names)
+
+            3. Write your review to /tmp/review-comment.txt in this format:
+
+            ## Code Review
+
+            ### Summary
+            Brief summary of what this PR does.
+
+            ### Title Convention
+            Note if title follows format (type: lowercase description, file names keep case)
+
+            ### Feedback
+            - Point 1
+            - Point 2
+
+            ### Suggestions
+            - Suggestion 1 (if any)
+
+            ### Overall
+            Your assessment.
+
+            ---
+            *Auto-generated review by Claude*
+
+            4. After writing the file, output "REVIEW COMPLETE" to confirm.
+
+          claude_args: '--allowedTools "Read" --allowedTools "Write"'
+
+      - name: Post review comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          echo "========== Posting Review =========="
+
+          if [ -f /tmp/review-comment.txt ]; then
+            echo "Claude generated review ($(wc -c < /tmp/review-comment.txt) bytes)"
+            REVIEW_FILE="/tmp/review-comment.txt"
+          else
+            echo "Claude didn't generate review, using fallback..."
+            PR_STATS=$(gh pr view "$PR_NUMBER" --json files,additions,deletions,title)
+            FILES_CHANGED=$(echo "$PR_STATS" | jq '.files | length')
+            ADDITIONS=$(echo "$PR_STATS" | jq '.additions')
+            DELETIONS=$(echo "$PR_STATS" | jq '.deletions')
+            TITLE=$(echo "$PR_STATS" | jq -r '.title')
+
+            TITLE_CHECK="Title should use conventional commit format (type: lowercase description)"
+            if echo "$TITLE" | grep -qE "^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)(\(.+\))?:"; then
+              TITLE_CHECK="Title follows conventional commit format"
+            fi
+
+            printf '%s\n' "## Code Review" "" "*Automated review - Claude was unable to generate detailed feedback.*" "" "### Stats" "- **Files changed:** $FILES_CHANGED" "- **Lines added:** +$ADDITIONS" "- **Lines deleted:** -$DELETIONS" "" "### Title Convention" "$TITLE_CHECK" "" "### Checklist" "- [ ] Code follows project conventions" "- [ ] No obvious bugs" "- [ ] Tests added if needed" "" "---" "*Fallback review*" > /tmp/fallback-review.txt
+            REVIEW_FILE="/tmp/fallback-review.txt"
+          fi
+
+          echo "--- Review content ---"
+          cat "$REVIEW_FILE"
+          echo "--- End review ---"
+
+          gh pr comment "$PR_NUMBER" --body-file "$REVIEW_FILE"
+          echo "Review posted"

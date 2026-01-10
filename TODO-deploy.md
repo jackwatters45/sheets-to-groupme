@@ -1,35 +1,5 @@
 # Deployment Next Steps
 
-## Prerequisites
-
-### Install Infisical CLI
-
-```bash
-# macOS
-brew install infisical/get-cli/infisical
-
-# Linux (Debian/Ubuntu)
-curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash
-sudo apt-get update && sudo apt-get install -y infisical
-
-# Windows (via Scoop)
-scoop bucket add org https://github.com/infisical/scoop-infisical.git
-scoop install infisical
-```
-
-### Install Fly CLI (for deployment)
-
-```bash
-# macOS
-brew install flyctl
-
-# Linux
-curl -L https://fly.io/install.sh | sh
-
-# Windows
-powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
-```
-
 ## Infisical Setup
 
 ### 1. Create Infisical Account & Project
@@ -42,44 +12,26 @@ powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
 
 In your Infisical project, add these secrets to the **Development** environment:
 
-| Secret Name | Description | Example |
-|-------------|-------------|---------|
-| `GOOGLE_SHEET_ID` | Spreadsheet ID from URL | `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms` |
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email | `myapp@myproject.iam.gserviceaccount.com` |
-| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Private key (with newlines) | `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n` |
-| `GOOGLE_PROJECT_ID` | Google Cloud project ID | `my-gcp-project-123` |
-| `GROUPME_GROUP_ID` | GroupMe group ID | `12345678` |
-| `GROUPME_ACCESS_TOKEN` | GroupMe API token | `abc123...` |
-| `COLUMN_NAME` | Header for name column | `Name` |
-| `COLUMN_EMAIL` | Header for email column | `Email` |
-| `COLUMN_PHONE` | Header for phone column | `Phone` |
-| `FLY_REGION` | Fly.io deployment region | `sfo` |
-| `DISCORD_WEBHOOK_URL` | Discord webhook for notifications | `https://discord.com/api/webhooks/...` |
+| Secret Name                          | Description                       | Example                                                         |
+| ------------------------------------ | --------------------------------- | --------------------------------------------------------------- |
+| `GOOGLE_SHEET_ID`                    | Spreadsheet ID from URL           | `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms`                  |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL`       | Service account email             | `myapp@myproject.iam.gserviceaccount.com`                       |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Private key (with newlines)       | `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n` |
+| `GOOGLE_PROJECT_ID`                  | Google Cloud project ID           | `my-gcp-project-123`                                            |
+| `GROUPME_GROUP_ID`                   | GroupMe group ID                  | `12345678`                                                      |
+| `GROUPME_ACCESS_TOKEN`               | GroupMe API token                 | `abc123...`                                                     |
+| `COLUMN_NAME`                        | Header for name column            | `Name`                                                          |
+| `COLUMN_EMAIL`                       | Header for email column           | `Email`                                                         |
+| `COLUMN_PHONE`                       | Header for phone column           | `Phone`                                                         |
+| `FLY_REGION`                         | Fly.io deployment region          | `sfo`                                                           |
+| `DISCORD_WEBHOOK_URL`                | Discord webhook for notifications | `https://discord.com/api/webhooks/...`                          |
 
 **Tip**: For the private key, paste it with literal `\n` characters or use Infisical's multi-line input.
-
-### 3. Login to Infisical CLI
-
-```bash
-# Login (opens browser)
-infisical login
-
-# Verify login
-infisical whoami
-```
-
-### 4. Initialize Project Locally
-
-```bash
-# In project root, link to your Infisical project
-infisical init
-
-# This creates .infisical.json with your project ID
-```
 
 ### 5. Create Production Environment
 
 In Infisical dashboard:
+
 1. Go to your project → Environments
 2. Create a **Production** environment
 3. Copy secrets from Development (or add production-specific values)
@@ -192,7 +144,7 @@ fly rollback <release_number>
    - URL: `https://groupme.com/groups/[GROUP_ID]/messages`
    - Or: Group → Settings → Group ID at bottom
 
-## Discord Webhook Setup (Optional)
+## Discord Webhook Setup
 
 1. Open Discord → Server Settings → Integrations
 2. Click "Webhooks" → "New Webhook"
@@ -202,19 +154,6 @@ fly rollback <release_number>
 6. Add to Infisical as `DISCORD_WEBHOOK_URL`
 
 ## Troubleshooting
-
-### Infisical CLI Issues
-
-```bash
-# Check if logged in
-infisical whoami
-
-# Re-login if needed
-infisical login
-
-# Check project link
-cat .infisical.json
-```
 
 ### Missing Secrets
 

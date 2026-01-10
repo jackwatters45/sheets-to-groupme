@@ -1,6 +1,5 @@
 import { Array as Arr, Effect } from "effect";
 import { AppConfig } from "../config";
-import { error, info } from "../core/logger";
 import { type UserContact, fetchRows, parseUserContacts } from "../google/client";
 import { type GroupMeMember, addGroupMeMember } from "../groupme/client";
 import {
@@ -121,7 +120,7 @@ const processContact = (
 
     if (!addResult.success) {
       const errorMessage = (addResult as { errorMessage?: string }).errorMessage ?? "Unknown error";
-      error(`Failed to add member ${contact.name}: ${errorMessage}`);
+      yield* Effect.logError(`Failed to add member ${contact.name}: ${errorMessage}`);
 
       return {
         state: context.state,
@@ -184,12 +183,12 @@ export const runSync = Effect.gen(function* () {
   const startTime = Date.now();
   const config = yield* AppConfig;
 
-  info("Starting sync...");
+  yield* Effect.logInfo("Starting sync...");
 
   const rows = yield* fetchRows(config.google.sheetId, DEFAULT_RANGE);
 
   if (rows.length === 0) {
-    info("No rows found in Google Sheet");
+    yield* Effect.logInfo("No rows found in Google Sheet");
     return yield* Effect.succeed({
       added: 0,
       skipped: 0,
@@ -209,7 +208,7 @@ export const runSync = Effect.gen(function* () {
   const userContacts = yield* parseUserContacts(rows, columnMapping);
 
   if (userContacts.length === 0) {
-    info("No valid user contacts found");
+    yield* Effect.logInfo("No valid user contacts found");
     return yield* Effect.succeed({
       added: 0,
       skipped: 0,
@@ -220,7 +219,7 @@ export const runSync = Effect.gen(function* () {
     });
   }
 
-  info(`Found ${userContacts.length} user contacts`);
+  yield* Effect.logInfo(`Found ${userContacts.length} user contacts`);
 
   const currentState = yield* loadState();
 
@@ -239,7 +238,7 @@ export const runSync = Effect.gen(function* () {
   yield* saveState(finalContext.state);
 
   const duration = Date.now() - startTime;
-  info(
+  yield* Effect.logInfo(
     `Sync complete: added=${finalContext.added}, skipped=${finalContext.skipped}, errors=${finalContext.errors}, duration=${duration}ms`
   );
 

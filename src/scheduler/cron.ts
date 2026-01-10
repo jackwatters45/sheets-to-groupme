@@ -1,5 +1,4 @@
 import { Effect } from "effect";
-import { error, info } from "../core/logger";
 import { runSync } from "../sync/sync";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -9,7 +8,7 @@ let isShuttingDown = false;
 const shutdown = () => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  info("Shutdown signal received, stopping cron...");
+  console.log("[INFO] Shutdown signal received, stopping cron...");
 };
 
 process.on("SIGTERM", shutdown);
@@ -20,19 +19,19 @@ process.on("SIGINT", shutdown);
  * This is the main entry point for the scheduled application.
  */
 export const runHourlySync = async (): Promise<void> => {
-  info(`Starting cron scheduler with ${ONE_HOUR_MS}ms interval`);
+  console.log(`[INFO] Starting cron scheduler with ${ONE_HOUR_MS}ms interval`);
 
   const runOnce = async (): Promise<void> => {
     try {
       const result = await Effect.runPromise(runSync);
-      info("Sync complete", {
+      console.log("Sync complete", {
         added: result.added,
         skipped: result.skipped,
         errors: result.errors,
         duration: `${result.duration}ms`,
       });
     } catch (err) {
-      error("Sync failed", {
+      console.error("Sync failed", {
         message: err instanceof Error ? err.message : "Unknown error",
       });
     }
@@ -55,5 +54,5 @@ export const runHourlySync = async (): Promise<void> => {
   clearInterval(intervalId);
   process.off("SIGTERM", shutdown);
   process.off("SIGINT", shutdown);
-  info("Cron scheduler stopped");
+  console.log("[INFO] Cron scheduler stopped");
 };

@@ -18,6 +18,7 @@ export interface AppConfig {
   };
   deployment: {
     flyRegion: string;
+    discordWebhookUrl: string;
   };
 }
 
@@ -39,5 +40,6 @@ export const AppConfig = Config.all({
   }),
   deployment: Config.all({
     flyRegion: Config.string("FLY_REGION").pipe(Config.withDefault("sfo")),
+    discordWebhookUrl: Config.string("DISCORD_WEBHOOK_URL"),
   }),
 });

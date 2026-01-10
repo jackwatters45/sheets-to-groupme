@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer } from "effect";
-import * as client from "../google/client";
-import * as groupme from "../groupme/client";
+import { ColumnMappingError, GoogleSheetsService } from "../google/client";
+import { type GroupMeMember, GroupMeService } from "../groupme/client";
 
 // Test config
 interface TestConfig {
@@ -48,7 +48,15 @@ const createTestConfig = (): TestConfig => ({
   },
 });
 
-const testLayer = (config: TestConfig) => Layer.setConfigProvider(createTestConfigProvider(config));
+const googleTestLayer = (config: TestConfig) =>
+  GoogleSheetsService.Default.pipe(
+    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
+  );
+
+const groupmeTestLayer = (config: TestConfig) =>
+  GroupMeService.Default.pipe(
+    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
+  );
 
 describe("Cron Scheduler", () => {
   describe("unit tests", () => {
@@ -94,17 +102,18 @@ describe("Cron Scheduler", () => {
         const originalFetch = globalThis.fetch;
         try {
           (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const result = yield* client.fetchRows("test-sheet-id", "Sheet1!A1:C2");
+          const service = yield* GoogleSheetsService;
+          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
           expect(result).toEqual(mockValues);
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(googleTestLayer(testConfig)));
     });
 
     it.effect("should add member to GroupMe", () => {
       const testConfig = createTestConfig();
-      const member: groupme.GroupMeMember = {
+      const member: GroupMeMember = {
         nickname: "Test User",
         email: "test@example.com",
         phone_number: "+1234567890",
@@ -125,13 +134,14 @@ describe("Cron Scheduler", () => {
         const originalFetch = globalThis.fetch;
         try {
           (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const result = yield* groupme.addGroupMeMember("test-group-id", member);
+          const service = yield* GroupMeService;
+          const result = yield* service.addMember("test-group-id", member);
           expect(result.success).toBe(true);
           expect(result.memberId).toBe("12345");
         } finally {
           globalThis.fetch = originalFetch;
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(groupmeTestLayer(testConfig)));
     });
 
     it.effect("should parse user contacts from rows", () => {
@@ -143,7 +153,8 @@ describe("Cron Scheduler", () => {
       ];
 
       return Effect.gen(function* () {
-        const result = yield* client.parseUserContacts(rows, {
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.parseUserContacts(rows, {
           name: "Name",
           email: "Email",
           phone: "Phone",
@@ -151,7 +162,7 @@ describe("Cron Scheduler", () => {
         expect(result).toHaveLength(2);
         expect(result[0].name).toBe("John Doe");
         expect(result[1].name).toBe("Jane Doe");
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(googleTestLayer(testConfig)));
     });
 
     it.effect("should handle empty rows", () => {
@@ -159,13 +170,14 @@ describe("Cron Scheduler", () => {
       const rows: string[][] = [];
 
       return Effect.gen(function* () {
-        const result = yield* client.parseUserContacts(rows, {
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.parseUserContacts(rows, {
           name: "Name",
           email: "Email",
           phone: "Phone",
         });
         expect(result).toEqual([]);
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(googleTestLayer(testConfig)));
     });
 
     it.effect("should fail when columns missing", () => {
@@ -176,14 +188,15 @@ describe("Cron Scheduler", () => {
       ];
 
       return Effect.gen(function* () {
+        const service = yield* GoogleSheetsService;
         const result = yield* Effect.either(
-          client.parseUserContacts(rows, { name: "Name", email: "Email", phone: "Phone" })
+          service.parseUserContacts(rows, { name: "Name", email: "Email", phone: "Phone" })
         );
         expect(result._tag).toBe("Left");
         if (result._tag === "Left") {
-          expect(result.left).toBeInstanceOf(client.ColumnMappingError);
+          expect(result.left).toBeInstanceOf(ColumnMappingError);
         }
-      }).pipe(Effect.provide(testLayer(testConfig)));
+      }).pipe(Effect.provide(googleTestLayer(testConfig)));
     });
   });
 });

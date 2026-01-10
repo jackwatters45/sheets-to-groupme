@@ -41,74 +41,7 @@ const createJwtAssertion = (clientEmail: string, _privateKey: string, scope: str
   return `${encodedHeader}.${encodedPayload}.${signature}`;
 };
 
-export const fetchRows = (sheetId: string, range: string) =>
-  Effect.gen(function* () {
-    const config = yield* AppConfig;
-
-    const jwt = createJwtAssertion(
-      config.google.serviceAccountEmail,
-      config.google.serviceAccountPrivateKey,
-      "https://www.googleapis.com/auth/spreadsheets"
-    );
-
-    const tokenResponse = yield* Effect.tryPromise({
-      try: async () =>
-        fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            assertion: jwt,
-          }),
-        }),
-      catch: (error) =>
-        new GoogleAuthError({
-          message: error instanceof Error ? error.message : "Token exchange failed",
-          cause: error,
-        }),
-    });
-
-    if (!tokenResponse.ok) {
-      return yield* Effect.fail(new GoogleAuthError({ message: "Token exchange failed" }));
-    }
-
-    const tokenData = yield* Effect.tryPromise({
-      try: async () => tokenResponse.json() as Promise<{ access_token: string }>,
-      catch: (error) =>
-        new GoogleAuthError({ message: "Failed to parse token response", cause: error }),
-    });
-
-    const accessToken = tokenData.access_token;
-
-    const response = yield* Effect.tryPromise({
-      try: async () =>
-        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "application/json",
-          },
-        }),
-      catch: (error) =>
-        new GoogleAuthError({
-          message: error instanceof Error ? error.message : "Request failed",
-          cause: error,
-        }),
-    });
-
-    if (!response.ok) {
-      return yield* Effect.fail(
-        new GoogleAuthError({ message: `Google Sheets API error: ${response.status}` })
-      );
-    }
-
-    const data = yield* Effect.tryPromise({
-      try: async () => response.json() as Promise<{ values?: string[][] }>,
-      catch: (error) => new GoogleAuthError({ message: "Failed to parse response", cause: error }),
-    });
-
-    return data.values ?? [];
-  });
-
+// Pure utility functions (no Effect needed)
 export const findColumnIndices = (
   headers: string[],
   columnMapping: {
@@ -149,36 +82,115 @@ export const extractUserContacts = (
     });
 };
 
-export const parseUserContacts = (
-  rows: readonly string[][],
-  columnMapping: {
-    name: string;
-    email: string;
-    phone: string;
+export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
+  "GoogleSheetsService",
+  {
+    effect: Effect.gen(function* () {
+      const config = yield* AppConfig;
+
+      const fetchRows = (sheetId: string, range: string) =>
+        Effect.gen(function* () {
+          const jwt = createJwtAssertion(
+            config.google.serviceAccountEmail,
+            config.google.serviceAccountPrivateKey,
+            "https://www.googleapis.com/auth/spreadsheets"
+          );
+
+          const tokenResponse = yield* Effect.tryPromise({
+            try: async () =>
+              fetch("https://oauth2.googleapis.com/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                  grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                  assertion: jwt,
+                }),
+              }),
+            catch: (error) =>
+              new GoogleAuthError({
+                message: error instanceof Error ? error.message : "Token exchange failed",
+                cause: error,
+              }),
+          });
+
+          if (!tokenResponse.ok) {
+            return yield* Effect.fail(new GoogleAuthError({ message: "Token exchange failed" }));
+          }
+
+          const tokenData = yield* Effect.tryPromise({
+            try: async () => tokenResponse.json() as Promise<{ access_token: string }>,
+            catch: (error) =>
+              new GoogleAuthError({ message: "Failed to parse token response", cause: error }),
+          });
+
+          const accessToken = tokenData.access_token;
+
+          const response = yield* Effect.tryPromise({
+            try: async () =>
+              fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`, {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  Accept: "application/json",
+                },
+              }),
+            catch: (error) =>
+              new GoogleAuthError({
+                message: error instanceof Error ? error.message : "Request failed",
+                cause: error,
+              }),
+          });
+
+          if (!response.ok) {
+            return yield* Effect.fail(
+              new GoogleAuthError({ message: `Google Sheets API error: ${response.status}` })
+            );
+          }
+
+          const data = yield* Effect.tryPromise({
+            try: async () => response.json() as Promise<{ values?: string[][] }>,
+            catch: (error) =>
+              new GoogleAuthError({ message: "Failed to parse response", cause: error }),
+          });
+
+          return data.values ?? [];
+        });
+
+      const parseUserContacts = (
+        rows: readonly string[][],
+        columnMapping: {
+          name: string;
+          email: string;
+          phone: string;
+        }
+      ): Effect.Effect<UserContact[], ColumnMappingError> => {
+        if (rows.length === 0) {
+          return Effect.succeed([]);
+        }
+
+        const headers = rows[0];
+        const dataRows = rows.slice(1);
+
+        const { nameIndex, emailIndex, phoneIndex } = findColumnIndices(headers, columnMapping);
+
+        const missingColumns: string[] = [];
+        if (nameIndex === -1) missingColumns.push(columnMapping.name);
+        if (emailIndex === -1) missingColumns.push(columnMapping.email);
+        if (phoneIndex === -1) missingColumns.push(columnMapping.phone);
+
+        if (missingColumns.length > 0) {
+          return Effect.fail(
+            new ColumnMappingError({
+              message: `Missing required columns: ${missingColumns.join(", ")}`,
+              column: missingColumns[0],
+            })
+          );
+        }
+
+        return Effect.succeed(extractUserContacts(dataRows, { nameIndex, emailIndex, phoneIndex }));
+      };
+
+      return { fetchRows, parseUserContacts };
+    }),
+    dependencies: [],
   }
-): Effect.Effect<UserContact[], ColumnMappingError> => {
-  if (rows.length === 0) {
-    return Effect.succeed([]);
-  }
-
-  const headers = rows[0];
-  const dataRows = rows.slice(1);
-
-  const { nameIndex, emailIndex, phoneIndex } = findColumnIndices(headers, columnMapping);
-
-  const missingColumns: string[] = [];
-  if (nameIndex === -1) missingColumns.push(columnMapping.name);
-  if (emailIndex === -1) missingColumns.push(columnMapping.email);
-  if (phoneIndex === -1) missingColumns.push(columnMapping.phone);
-
-  if (missingColumns.length > 0) {
-    return Effect.fail(
-      new ColumnMappingError({
-        message: `Missing required columns: ${missingColumns.join(", ")}`,
-        column: missingColumns[0],
-      })
-    );
-  }
-
-  return Effect.succeed(extractUserContacts(dataRows, { nameIndex, emailIndex, phoneIndex }));
-};
+) {}

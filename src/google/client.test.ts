@@ -3,10 +3,9 @@ import { ConfigProvider, Effect, Layer } from "effect";
 import {
   ColumnMappingError,
   GoogleAuthError,
+  GoogleSheetsService,
   extractUserContacts,
-  fetchRows,
   findColumnIndices,
-  parseUserContacts,
 } from "./client";
 
 interface TestConfig {
@@ -53,12 +52,16 @@ const createTestConfig = (): TestConfig => ({
   },
 });
 
-const testLayer = (config: TestConfig) => Layer.setConfigProvider(createTestConfigProvider(config));
+const testLayer = (config: TestConfig) =>
+  GoogleSheetsService.Default.pipe(
+    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
+  );
 
-describe("GoogleSheetsClient", () => {
+describe("GoogleSheetsService", () => {
   describe("unit tests", () => {
-    it("should have fetchRows function", () => {
-      expect(typeof fetchRows).toBe("function");
+    it("should have GoogleSheetsService defined", () => {
+      expect(GoogleSheetsService).toBeDefined();
+      expect(GoogleSheetsService.Default).toBeDefined();
     });
 
     it("should have GoogleAuthError defined", () => {
@@ -75,7 +78,7 @@ describe("GoogleSheetsClient", () => {
     });
   });
 
-  describe("integration tests", () => {
+  describe("fetchRows", () => {
     it.effect("should fetch rows from Google Sheets", () => {
       const testConfig = createTestConfig();
       const mockValues = [
@@ -98,7 +101,8 @@ describe("GoogleSheetsClient", () => {
         const originalFetch = globalThis.fetch;
         try {
           (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const result = yield* fetchRows("test-sheet-id", "Sheet1!A1:C2");
+          const service = yield* GoogleSheetsService;
+          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
           expect(result).toEqual(mockValues);
         } finally {
           globalThis.fetch = originalFetch;
@@ -124,7 +128,8 @@ describe("GoogleSheetsClient", () => {
         const originalFetch = globalThis.fetch;
         try {
           (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const result = yield* fetchRows("test-sheet-id", "Sheet1!A1:C2");
+          const service = yield* GoogleSheetsService;
+          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
           expect(result).toEqual([]);
         } finally {
           globalThis.fetch = originalFetch;
@@ -144,7 +149,8 @@ describe("GoogleSheetsClient", () => {
         const originalFetch = globalThis.fetch;
         try {
           (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const result = yield* Effect.either(fetchRows("test-sheet-id", "Sheet1!A1:C2"));
+          const service = yield* GoogleSheetsService;
+          const result = yield* Effect.either(service.fetchRows("test-sheet-id", "Sheet1!A1:C2"));
           expect(result._tag).toBe("Left");
           if (result._tag === "Left") {
             expect(result.left).toBeInstanceOf(GoogleAuthError);
@@ -173,7 +179,8 @@ describe("GoogleSheetsClient", () => {
         const originalFetch = globalThis.fetch;
         try {
           (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const result = yield* Effect.either(fetchRows("test-sheet-id", "Sheet1!A1:C2"));
+          const service = yield* GoogleSheetsService;
+          const result = yield* Effect.either(service.fetchRows("test-sheet-id", "Sheet1!A1:C2"));
           expect(result._tag).toBe("Left");
           if (result._tag === "Left") {
             expect(result.left).toBeInstanceOf(GoogleAuthError);
@@ -338,7 +345,8 @@ describe("GoogleSheetsClient", () => {
       ];
 
       return Effect.gen(function* () {
-        const result = yield* parseUserContacts(rows, {
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.parseUserContacts(rows, {
           name: "Name",
           email: "Email",
           phone: "Phone",
@@ -355,7 +363,8 @@ describe("GoogleSheetsClient", () => {
       const rows: string[][] = [];
 
       return Effect.gen(function* () {
-        const result = yield* parseUserContacts(rows, {
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.parseUserContacts(rows, {
           name: "Name",
           email: "Email",
           phone: "Phone",
@@ -372,13 +381,14 @@ describe("GoogleSheetsClient", () => {
       ];
 
       return Effect.gen(function* () {
+        const service = yield* GoogleSheetsService;
         const result = yield* Effect.either(
-          parseUserContacts(rows, { name: "Name", email: "Email", phone: "Phone" })
+          service.parseUserContacts(rows, { name: "Name", email: "Email", phone: "Phone" })
         );
         expect(result._tag).toBe("Left");
         if (result._tag === "Left") {
           expect(result.left).toBeInstanceOf(ColumnMappingError);
-          expect(result.left.column).toBe("Name");
+          expect((result.left as ColumnMappingError).column).toBe("Name");
         }
       }).pipe(Effect.provide(testLayer(testConfig)));
     });
@@ -388,14 +398,15 @@ describe("GoogleSheetsClient", () => {
       const rows = [["Address"], ["123 Main St"]];
 
       return Effect.gen(function* () {
+        const service = yield* GoogleSheetsService;
         const result = yield* Effect.either(
-          parseUserContacts(rows, { name: "Name", email: "Email", phone: "Phone" })
+          service.parseUserContacts(rows, { name: "Name", email: "Email", phone: "Phone" })
         );
         expect(result._tag).toBe("Left");
         if (result._tag === "Left") {
           expect(result.left).toBeInstanceOf(ColumnMappingError);
           // The first missing column should be reported
-          expect(["Name", "Email", "Phone"]).toContain(result.left.column);
+          expect(["Name", "Email", "Phone"]).toContain((result.left as ColumnMappingError).column);
         }
       }).pipe(Effect.provide(testLayer(testConfig)));
     });
@@ -408,7 +419,8 @@ describe("GoogleSheetsClient", () => {
       ];
 
       return Effect.gen(function* () {
-        const result = yield* parseUserContacts(rows, {
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.parseUserContacts(rows, {
           name: "Name",
           email: "Email",
           phone: "Phone",

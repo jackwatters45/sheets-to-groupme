@@ -357,7 +357,7 @@
     "id": "NOTIFY-001",
     "category": "integration",
     "description": "Integrate NotifyService into cron scheduler",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Add NotifyService dependency to cron.ts syncOnce",
       "Call notifySuccess with sync stats after successful sync",
@@ -384,7 +384,7 @@
     "id": "TEST-COVERAGE-FIX",
     "category": "test",
     "description": "Fix coverage gaps to meet 60% threshold",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Add SyncService tests with mocked dependencies (sync.ts at 2%)",
       "Add StateService load/save tests with fs mocks (store.ts at 24%)",

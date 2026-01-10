@@ -68,3 +68,39 @@ Coverage: 45.81% -> 51.98% (↑6.17%)
 src/google/client.ts: 65.38% -> 92.30%
 Tests: 121 passed, 12 skipped -> 124 passed, 8 skipped
 Gotchas: Use vi.hoisted() from vitest (not @effect/vitest) to create mock class, then vi.mock() references it. Import order matters for biome but vi.hoisted handles actual hoisting.
+
+[TEST-FIX-SYNC] COMPLETE
+Feature: Fix SyncService tests with google-auth-library mocking
+Files: src/sync/sync.test.ts
+Tests: 7 tests (2 previously skipped now pass)
+Gotchas: Applied same vi.hoisted() pattern for google-auth-library mock
+
+[TEST-FIX-CRON] COMPLETE
+Feature: Fix cron scheduler test with google-auth-library mocking
+Files: src/scheduler/cron.test.ts
+Tests: 16 tests (1 previously skipped now passes)
+Gotchas: Applied same vi.hoisted() pattern for google-auth-library mock
+
+[TEST-FIX-STATE] COMPLETE
+Feature: Unskip crypto.subtle generateRowId tests
+Files: src/state/store.test.ts
+Tests: 24 tests (5 previously skipped now pass)
+Gotchas: crypto.subtle IS available in Bun test environment - tests just needed to be unskipped
+
+=== COVERAGE SUMMARY (Post Session) ===
+Current Coverage: 66.95% lines, 59.37% functions, 58.33% branches
+Target: 60% ✓ ACHIEVED
+Total Tests: 132 passed, 0 skipped
+
+Coverage by file:
+- src/core/schema.ts: 100%
+- src/google/client.ts: 92.72%
+- src/groupme/client.ts: 95.74%
+- src/state/store.ts: 58.69%
+- src/sync/sync.ts: 37.03%
+- src/scheduler/cron.ts: 18.18%
+
+Remaining coverage gaps:
+- scheduler/cron.ts: syncOnce function requires mocking StateService file operations
+- sync/sync.ts: processContact/processContacts require mocking StateService
+- state/store.ts: load/save functions require file system mocking

@@ -1,5 +1,5 @@
 import { Effect, Schedule, Cron, Console } from "effect";
-import { runSync } from "../sync/sync";
+import { SyncService } from "../sync/sync";
 
 /**
  * Cron expression for running every hour on the hour.
@@ -17,7 +17,8 @@ const hourlySchedule = Schedule.cron(hourlyCron);
  */
 const syncOnce = Effect.gen(function* () {
   yield* Console.log("[INFO] Starting sync job...");
-  const result = yield* runSync;
+  const syncService = yield* SyncService;
+  const result = yield* syncService.run;
   yield* Console.log(
     `[INFO] Sync complete: added=${result.added}, skipped=${result.skipped}, errors=${result.errors}, duration=${result.duration}ms`
   );
@@ -30,7 +31,8 @@ const syncOnce = Effect.gen(function* () {
       );
       return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
     })
-  )
+  ),
+  Effect.provide(SyncService.Default)
 );
 
 /**

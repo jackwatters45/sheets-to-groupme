@@ -1,6 +1,12 @@
-import { Array as Arr, Effect } from "effect";
+import { Array as Arr, Data, Effect } from "effect";
 import { AppConfig } from "../config";
-import { type UserContact, fetchRows, parseUserContacts } from "../google/client";
+import {
+  SyncResult,
+  SyncResultDetail,
+  SyncResultFailedRow,
+  UserContact,
+} from "../core/schema";
+import { fetchRows, parseUserContacts } from "../google/client";
 import { type GroupMeMember, addGroupMeMember } from "../groupme/client";
 import {
   type SyncState,
@@ -11,25 +17,10 @@ import {
   saveState,
 } from "../state/store";
 
-export interface SyncResult {
-  added: number;
-  skipped: number;
-  errors: number;
-  duration: number;
-  details: Array<{
-    rowId: string;
-    name: string;
-    status: "added" | "skipped" | "error" | "failed";
-    error?: string;
-    timestamp?: string;
-  }>;
-  failedRows: Array<{
-    rowId: string;
-    contact: UserContact;
-    error: string;
-    timestamp: string;
-  }>;
-}
+export class SyncError extends Data.TaggedError("SyncError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 const DEFAULT_RANGE = "A:Z";
 
@@ -39,8 +30,8 @@ interface ProcessingContext {
   skipped: number;
   errors: number;
   failedCount: number;
-  details: SyncResult["details"];
-  failedRows: SyncResult["failedRows"];
+  details: SyncResultDetail[];
+  failedRows: SyncResultFailedRow[];
 }
 
 const processContact = (
@@ -67,13 +58,13 @@ const processContact = (
           failedCount: context.failedCount,
           details: [
             ...context.details,
-            {
+            new SyncResultDetail({
               rowId,
               name: contact.name,
               status: "skipped",
               error: "already_processed",
               timestamp,
-            },
+            }),
           ],
           failedRows: context.failedRows,
         };
@@ -106,13 +97,13 @@ const processContact = (
         failedCount: context.failedCount,
         details: [
           ...context.details,
-          {
+          new SyncResultDetail({
             rowId,
             name: contact.name,
             status: "skipped",
             error: "already_exists",
             timestamp,
-          },
+          }),
         ],
         failedRows: context.failedRows,
       };
@@ -130,22 +121,22 @@ const processContact = (
         failedCount: context.failedCount + 1,
         details: [
           ...context.details,
-          {
+          new SyncResultDetail({
             rowId,
             name: contact.name,
             status: "error",
             error: errorMessage,
             timestamp,
-          },
+          }),
         ],
         failedRows: [
           ...context.failedRows,
-          {
+          new SyncResultFailedRow({
             rowId,
             contact,
             error: errorMessage,
             timestamp,
-          },
+          }),
         ],
       };
     }
@@ -159,12 +150,12 @@ const processContact = (
       failedCount: context.failedCount,
       details: [
         ...context.details,
-        {
+        new SyncResultDetail({
           rowId,
           name: contact.name,
           status: "added",
           timestamp,
-        },
+        }),
       ],
       failedRows: context.failedRows,
     };
@@ -179,75 +170,96 @@ const processContacts = (
     Effect.flatMap(acc, (ctx) => processContact(contact, ctx, groupId))
   );
 
+export class SyncService extends Effect.Service<SyncService>()("SyncService", {
+  effect: Effect.gen(function* () {
+    const config = yield* AppConfig;
+
+    const run = Effect.gen(function* () {
+      const startTime = Date.now();
+
+      yield* Effect.logInfo("Starting sync...");
+
+      const rows = yield* fetchRows(config.google.sheetId, DEFAULT_RANGE);
+
+      if (rows.length === 0) {
+        yield* Effect.logInfo("No rows found in Google Sheet");
+        return new SyncResult({
+          added: 0,
+          skipped: 0,
+          errors: 0,
+          duration: Date.now() - startTime,
+          details: [],
+          failedRows: [],
+        });
+      }
+
+      const columnMapping = {
+        name: config.sync.columnName,
+        email: config.sync.columnEmail,
+        phone: config.sync.columnPhone,
+      };
+
+      const userContacts = yield* parseUserContacts(rows, columnMapping);
+
+      if (userContacts.length === 0) {
+        yield* Effect.logInfo("No valid user contacts found");
+        return new SyncResult({
+          added: 0,
+          skipped: 0,
+          errors: 0,
+          duration: Date.now() - startTime,
+          details: [],
+          failedRows: [],
+        });
+      }
+
+      yield* Effect.logInfo(`Found ${userContacts.length} user contacts`);
+
+      const currentState = yield* loadState();
+
+      const initialContext: ProcessingContext = {
+        state: currentState,
+        added: 0,
+        skipped: 0,
+        errors: 0,
+        failedCount: 0,
+        details: [],
+        failedRows: [],
+      };
+
+      const finalContext = yield* processContacts(
+        userContacts,
+        initialContext,
+        config.groupme.groupId
+      );
+
+      yield* saveState(finalContext.state);
+
+      const duration = Date.now() - startTime;
+      yield* Effect.logInfo(
+        `Sync complete: added=${finalContext.added}, skipped=${finalContext.skipped}, errors=${finalContext.errors}, duration=${duration}ms`
+      );
+
+      return new SyncResult({
+        added: finalContext.added,
+        skipped: finalContext.skipped,
+        errors: finalContext.errors,
+        duration,
+        details: finalContext.details,
+        failedRows: finalContext.failedRows,
+      });
+    });
+
+    return { run };
+  }),
+  dependencies: [],
+}) {}
+
+/**
+ * Convenience effect that runs the sync.
+ * Requires SyncService to be provided.
+ */
 export const runSync = Effect.gen(function* () {
-  const startTime = Date.now();
-  const config = yield* AppConfig;
-
-  yield* Effect.logInfo("Starting sync...");
-
-  const rows = yield* fetchRows(config.google.sheetId, DEFAULT_RANGE);
-
-  if (rows.length === 0) {
-    yield* Effect.logInfo("No rows found in Google Sheet");
-    return yield* Effect.succeed({
-      added: 0,
-      skipped: 0,
-      errors: 0,
-      duration: Date.now() - startTime,
-      details: [],
-      failedRows: [],
-    });
-  }
-
-  const columnMapping = {
-    name: config.sync.columnName,
-    email: config.sync.columnEmail,
-    phone: config.sync.columnPhone,
-  };
-
-  const userContacts = yield* parseUserContacts(rows, columnMapping);
-
-  if (userContacts.length === 0) {
-    yield* Effect.logInfo("No valid user contacts found");
-    return yield* Effect.succeed({
-      added: 0,
-      skipped: 0,
-      errors: 0,
-      duration: Date.now() - startTime,
-      details: [],
-      failedRows: [],
-    });
-  }
-
-  yield* Effect.logInfo(`Found ${userContacts.length} user contacts`);
-
-  const currentState = yield* loadState();
-
-  const initialContext: ProcessingContext = {
-    state: currentState,
-    added: 0,
-    skipped: 0,
-    errors: 0,
-    failedCount: 0,
-    details: [],
-    failedRows: [],
-  };
-
-  const finalContext = yield* processContacts(userContacts, initialContext, config.groupme.groupId);
-
-  yield* saveState(finalContext.state);
-
-  const duration = Date.now() - startTime;
-  yield* Effect.logInfo(
-    `Sync complete: added=${finalContext.added}, skipped=${finalContext.skipped}, errors=${finalContext.errors}, duration=${duration}ms`
-  );
-
-  return {
-    added: finalContext.added,
-    skipped: finalContext.skipped,
-    errors: finalContext.errors,
-    duration,
-    details: finalContext.details,
-    failedRows: finalContext.failedRows,
-  };
+  const syncService = yield* SyncService;
+  return yield* syncService.run;
 });

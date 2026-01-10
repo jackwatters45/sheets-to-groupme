@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
-import type {
+import {
   SyncResult,
   SyncResultDetail,
   SyncResultFailedRow,
   UserContact,
 } from "../core/schema";
+import { SyncError, SyncService } from "./sync";
 
 interface ProcessedRow {
   rowId: string;
@@ -264,17 +265,61 @@ describe("Sync Processing Logic", () => {
 
   describe("SyncResultFailedRow interface", () => {
     it("should have correct shape", () => {
-      const failedRow: SyncResultFailedRow = {
+      const failedRow = new SyncResultFailedRow({
         rowId: "abc123",
-        contact: { name: "John Doe", email: "john@example.com" },
+        contact: new UserContact({ name: "John Doe", email: "john@example.com" }),
         error: "Already exists",
         timestamp: "2024-01-01T00:00:00.000Z",
-      };
+      });
 
       expect(failedRow.rowId).toBe("abc123");
       expect(failedRow.contact.name).toBe("John Doe");
       expect(failedRow.error).toBe("Already exists");
       expect(failedRow.timestamp).toBe("2024-01-01T00:00:00.000Z");
+    });
+  });
+
+  describe("SyncError", () => {
+    it("should create SyncError with message", () => {
+      const error = new SyncError({ message: "Sync failed" });
+      expect(error._tag).toBe("SyncError");
+      expect(error.message).toBe("Sync failed");
+    });
+
+    it("should create SyncError with message and cause", () => {
+      const cause = new Error("Network error");
+      const error = new SyncError({ message: "Sync failed", cause });
+      expect(error._tag).toBe("SyncError");
+      expect(error.message).toBe("Sync failed");
+      expect(error.cause).toBe(cause);
+    });
+  });
+
+  describe("SyncService", () => {
+    it("should be defined as a service", () => {
+      expect(SyncService).toBeDefined();
+      expect(SyncService.Default).toBeDefined();
+    });
+  });
+
+  describe("SyncResult schema class", () => {
+    it("should create SyncResult with schema class", () => {
+      const result = new SyncResult({
+        added: 5,
+        skipped: 2,
+        errors: 1,
+        duration: 1500,
+        details: [
+          new SyncResultDetail({ rowId: "r1", name: "A", status: "added", timestamp: "t1" }),
+        ],
+        failedRows: [],
+      });
+
+      expect(result.added).toBe(5);
+      expect(result.skipped).toBe(2);
+      expect(result.errors).toBe(1);
+      expect(result.duration).toBe(1500);
+      expect(result.details).toHaveLength(1);
     });
   });
 });

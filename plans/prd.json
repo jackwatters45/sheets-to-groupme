@@ -279,5 +279,78 @@
       "bun run lint passes with no warnings",
       "biome check passes with no errors"
     ]
+  },
+  {
+    "id": "TEST-GROUPME",
+    "category": "test",
+    "description": "Test GroupMe API client (addMember, duplicate detection)",
+    "passes": false,
+    "steps": [
+      "Write unit tests for addGroupMeMember success path",
+      "Write unit tests for addGroupMeMember 409 duplicate response",
+      "Write unit tests for validateGroupMeToken 401 error",
+      "Write unit tests for getGroupMembers API call"
+    ]
+  },
+  {
+    "id": "TEST-STATE",
+    "category": "test",
+    "description": "Test state store (load, save, deduplication)",
+    "passes": false,
+    "steps": [
+      "Write unit tests for loadState creating new state file",
+      "Write unit tests for saveState persisting to file",
+      "Write unit tests for isDuplicateRow detection",
+      "Write unit tests for markRowAsProcessed state updates",
+      "Write integration tests for generateRowId SHA256 hash"
+    ]
+  },
+  {
+    "id": "TEST-SCHEMA",
+    "category": "test",
+    "description": "Test schema validation (UserContact, SyncResult)",
+    "passes": false,
+    "steps": [
+      "Write unit tests for UserContactSchema validation",
+      "Write unit tests for SyncResultSchema validation",
+      "Write unit tests for validateRowData helper",
+      "Test schema rejection of invalid data"
+    ]
+  },
+  {
+    "id": "TEST-SYNC",
+    "category": "test",
+    "description": "Test sync orchestration (full sync flow)",
+    "passes": false,
+    "steps": [
+      "Write integration test for runSync with mocked Google/GroupMe",
+      "Write unit tests for processContact success path",
+      "Write unit tests for processContact duplicate skip",
+      "Write unit tests for processContact error handling",
+      "Write test for sync result aggregation"
+    ]
+  },
+  {
+    "id": "TEST-CRON",
+    "category": "test",
+    "description": "Test cron scheduler (signal handling, intervals)",
+    "passes": false,
+    "steps": [
+      "Write unit test for runHourlySync initialization",
+      "Write unit test for SIGTERM signal handling",
+      "Write unit test for SIGINT signal handling",
+      "Test interval execution and cleanup"
+    ]
+  },
+  {
+    "id": "TEST-COVERAGE",
+    "category": "test",
+    "description": "Verify 90% coverage target is met",
+    "passes": false,
+    "steps": [
+      "Run coverage report",
+      "Identify any remaining gaps",
+      "Add additional tests if needed to reach 90%"
+    ]
   }
 ]

@@ -8,7 +8,7 @@ import {
   UserContact,
 } from "../core/schema";
 import { GoogleSheetsService } from "../google/client";
-import { GroupMeService } from "../groupme/client";
+import { GroupMeApiError, GroupMeService } from "../groupme/client";
 import { StateService } from "../state/store";
 import { SyncError, SyncService } from "./sync";
 
@@ -260,22 +260,29 @@ describe("SyncService", () => {
       })
     );
 
-    it.effect("should skip already processed row", () =>
+    it.effect("should skip row that was already successfully processed", () =>
       Effect.gen(function* () {
+        // Row data that will be processed
+        const rowData = ["Already Done", "done@example.com", "+15551111111"];
         const userContacts = [
-          new UserContact({ name: "Jane Doe", email: "jane@example.com", phone: "+15559876543" }),
+          new UserContact({ name: rowData[0], email: rowData[1], phone: rowData[2] }),
         ];
 
-        // Pre-populate state with a processed row (won't match since hash differs)
-        const existingRowId = "mockrowid12345";
+        // Compute the actual hash for this row (same algorithm as generateRowId)
+        const data = rowData.join("|");
+        const encoder = new TextEncoder();
+        const dataBuffer = encoder.encode(data);
+        const hashBuffer = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", dataBuffer));
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const rowId = hashArray
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+          .substring(0, 16);
+
+        // Pre-populate state with this exact row hash marked as successfully processed
         const mockState = createMockState(
           new Date().toISOString(),
-          new Map([
-            [
-              existingRowId,
-              { rowId: existingRowId, timestamp: new Date().toISOString(), success: true },
-            ],
-          ])
+          new Map([[rowId, { rowId, timestamp: new Date().toISOString(), success: true }]])
         );
 
         const mockStateService = new StateService({
@@ -287,7 +294,7 @@ describe("SyncService", () => {
           fetchRows: () =>
             Effect.succeed([
               ["Name", "Email", "Phone"],
-              ["Jane Doe", "jane@example.com", "+15559876543"],
+              rowData, // Same data we computed hash for
             ]),
           parseUserContacts: () => Effect.succeed(userContacts),
         });
@@ -324,8 +331,12 @@ describe("SyncService", () => {
 
         const result = yield* syncService.run;
 
-        // Row is new (different hash), so should be added
-        expect(result.added).toBe(1);
+        // Row should be skipped because it was already successfully processed
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(1);
+        expect(result.errors).toBe(0);
+        expect(result.details[0].status).toBe("skipped");
+        expect(result.details[0].error).toBe("already_processed");
       })
     );
 
@@ -445,6 +456,63 @@ describe("SyncService", () => {
         expect(result.errors).toBe(1);
         expect(result.details[0].status).toBe("error");
         expect(result.details[0].error).toBe("API limit exceeded");
+        expect(result.failedRows).toHaveLength(1);
+      })
+    );
+
+    it.effect("should handle GroupMe addMember exception", () =>
+      Effect.gen(function* () {
+        const userContacts = [new UserContact({ name: "Error User", phone: "+15553334444" })];
+
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: () => Effect.succeed(undefined as undefined),
+        });
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Phone"],
+              ["Error User", "+15553334444"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        // GroupMe throws an exception (not just returns {success: false})
+        // This covers the catchAll path on line 88
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.fail(new GroupMeApiError({ message: "Network connection failed" })),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        // Should handle the exception gracefully and mark as error
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(1);
+        expect(result.details[0].status).toBe("error");
+        expect(result.details[0].error).toBe("Network connection failed");
         expect(result.failedRows).toHaveLength(1);
       })
     );

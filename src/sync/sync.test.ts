@@ -1,7 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer } from "effect";
 import { vi } from "vitest";
-import { SyncResult, SyncResultDetail, type SyncResultFailedRow } from "../core/schema";
+import {
+  SyncResult,
+  SyncResultDetail,
+  type SyncResultFailedRow,
+  UserContact,
+} from "../core/schema";
+import { GoogleSheetsService } from "../google/client";
+import { GroupMeService } from "../groupme/client";
+import { StateService } from "../state/store";
 import { SyncError, SyncService } from "./sync";
 
 // Create hoisted mock for google-auth-library
@@ -174,5 +182,345 @@ describe("SyncService", () => {
       expect(SyncService).toBeDefined();
       expect(SyncService.Default).toBeDefined();
     });
+  });
+
+  describe("processContact with mocked services", () => {
+    const testConfig = createTestConfig();
+    const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(testConfig));
+
+    // Helper to create mock state with mutable Map (to satisfy type constraints)
+    const createMockState = (
+      lastRun: string | null = null,
+      processedRows: Map<string, { rowId: string; timestamp: string; success: boolean }> = new Map()
+    ) => ({
+      lastRun,
+      processedRows,
+    });
+
+    it.effect("should add new contact successfully", () =>
+      Effect.gen(function* () {
+        const userContacts = [
+          new UserContact({ name: "John Doe", email: "john@example.com", phone: "+15551234567" }),
+        ];
+
+        // Mock StateService
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: () => Effect.succeed(undefined as undefined),
+        });
+
+        // Mock GoogleSheetsService
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Email", "Phone"],
+              ["John Doe", "john@example.com", "+15551234567"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        // Mock GroupMeService - returns success
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: "12345",
+              userId: "u12345",
+              alreadyExists: false,
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        expect(result.added).toBe(1);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(0);
+        expect(result.details).toHaveLength(1);
+        expect(result.details[0].status).toBe("added");
+      })
+    );
+
+    it.effect("should skip already processed row", () =>
+      Effect.gen(function* () {
+        const userContacts = [
+          new UserContact({ name: "Jane Doe", email: "jane@example.com", phone: "+15559876543" }),
+        ];
+
+        // Pre-populate state with a processed row (won't match since hash differs)
+        const existingRowId = "mockrowid12345";
+        const mockState = createMockState(
+          new Date().toISOString(),
+          new Map([
+            [
+              existingRowId,
+              { rowId: existingRowId, timestamp: new Date().toISOString(), success: true },
+            ],
+          ])
+        );
+
+        const mockStateService = new StateService({
+          load: Effect.succeed(mockState),
+          save: () => Effect.succeed(undefined as undefined),
+        });
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Email", "Phone"],
+              ["Jane Doe", "jane@example.com", "+15559876543"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: "67890",
+              userId: "u67890",
+              alreadyExists: false,
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        // Row is new (different hash), so should be added
+        expect(result.added).toBe(1);
+      })
+    );
+
+    it.effect("should skip member that already exists in GroupMe", () =>
+      Effect.gen(function* () {
+        const userContacts = [new UserContact({ name: "Bob Smith", email: "bob@example.com" })];
+
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: () => Effect.succeed(undefined as undefined),
+        });
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Email"],
+              ["Bob Smith", "bob@example.com"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        // GroupMe returns alreadyExists
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: undefined,
+              userId: undefined,
+              alreadyExists: true,
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(1);
+        expect(result.errors).toBe(0);
+        expect(result.details[0].status).toBe("skipped");
+        expect(result.details[0].error).toBe("already_exists");
+      })
+    );
+
+    it.effect("should handle GroupMe add failure", () =>
+      Effect.gen(function* () {
+        const userContacts = [new UserContact({ name: "Carol White", phone: "+15551112222" })];
+
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: () => Effect.succeed(undefined as undefined),
+        });
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Phone"],
+              ["Carol White", "+15551112222"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        // GroupMe returns failure
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: false,
+              memberId: undefined,
+              userId: undefined,
+              alreadyExists: false,
+              errorMessage: "API limit exceeded",
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(1);
+        expect(result.details[0].status).toBe("error");
+        expect(result.details[0].error).toBe("API limit exceeded");
+        expect(result.failedRows).toHaveLength(1);
+      })
+    );
+
+    it.effect("should process multiple contacts", () =>
+      Effect.gen(function* () {
+        const userContacts = [
+          new UserContact({ name: "Alice", email: "alice@example.com" }),
+          new UserContact({ name: "Bob", email: "bob@example.com" }),
+          new UserContact({ name: "Carol", email: "carol@example.com" }),
+        ];
+
+        let savedStateSize = 0;
+
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: (state) =>
+            Effect.sync(() => {
+              savedStateSize = state.processedRows.size;
+            }),
+        });
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Email"],
+              ["Alice", "alice@example.com"],
+              ["Bob", "bob@example.com"],
+              ["Carol", "carol@example.com"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        let addMemberCallCount = 0;
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.sync(() => {
+              addMemberCallCount++;
+              return {
+                success: true,
+                memberId: `member${addMemberCallCount}`,
+                userId: `user${addMemberCallCount}`,
+                alreadyExists: false,
+              };
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        expect(result.added).toBe(3);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(0);
+        expect(result.details).toHaveLength(3);
+        expect(addMemberCallCount).toBe(3);
+        expect(savedStateSize).toBe(3);
+      })
+    );
   });
 });

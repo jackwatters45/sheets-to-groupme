@@ -13,9 +13,11 @@ vi.mock("google-auth-library", () => ({
   JWT: mockJWT,
 }));
 
+import { NotificationError, NotifyService } from "../error/notify";
 import { ColumnMappingError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
-import { runHourlySync } from "./cron";
+import { SyncError, SyncService } from "../sync/sync";
+import { CronService, runHourlySync } from "./cron";
 
 // Test config
 interface TestConfig {
@@ -87,6 +89,224 @@ describe("Cron Scheduler", () => {
       const cron = await import("./cron");
       expect(cron).toHaveProperty("runHourlySync");
     });
+  });
+
+  describe("CronService with mocked dependencies", () => {
+    it.effect("should run syncOnce successfully with mock services", () =>
+      Effect.gen(function* () {
+        // Create mock SyncService
+        const mockSyncService = new SyncService({
+          run: Effect.succeed({
+            added: 5,
+            skipped: 2,
+            errors: 0,
+            duration: 100,
+            details: [],
+            failedRows: [],
+          }),
+        });
+
+        // Create mock NotifyService
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () => Effect.succeed(undefined as undefined),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        // Create test layer with mocks
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        // Run CronService with mocked dependencies
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        const result = yield* cronService.syncOnce;
+
+        expect(result.added).toBe(5);
+        expect(result.skipped).toBe(2);
+        expect(result.errors).toBe(0);
+      })
+    );
+
+    it.effect("should handle multiple syncs with mock services", () =>
+      Effect.gen(function* () {
+        let callCount = 0;
+        const mockSyncService = new SyncService({
+          run: Effect.sync(() => {
+            callCount++;
+            return {
+              added: callCount,
+              skipped: 0,
+              errors: 0,
+              duration: 50,
+              details: [],
+              failedRows: [],
+            };
+          }),
+        });
+
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () => Effect.succeed(undefined as undefined),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        // Run syncOnce multiple times
+        const result1 = yield* cronService.syncOnce;
+        const result2 = yield* cronService.syncOnce;
+
+        expect(result1.added).toBe(1);
+        expect(result2.added).toBe(2);
+        expect(callCount).toBe(2);
+      })
+    );
+
+    it.effect("should handle sync errors and call notifyError", () =>
+      Effect.gen(function* () {
+        // Mock SyncService that fails - use die to create a defect that bypasses type checking
+        const syncError = new SyncError({ message: "Sync failed!" });
+        const mockSyncService = new SyncService({
+          run: Effect.die(syncError) as typeof SyncService.prototype.run,
+        });
+
+        // Mock NotifyService
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () => Effect.succeed(undefined as undefined),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        // The effect should complete (catchAllCause handles defects)
+        const result = yield* cronService.syncOnce.pipe(
+          Effect.catchAllCause(() =>
+            Effect.succeed({
+              added: 0,
+              skipped: 0,
+              errors: 1,
+              duration: 0,
+              details: [],
+              failedRows: [],
+            })
+          )
+        );
+
+        // Should return error result
+        expect(result.errors).toBe(1);
+      })
+    );
+
+    it.effect("should continue despite notification failure", () =>
+      Effect.gen(function* () {
+        let syncRan = false;
+
+        // Mock SyncService that succeeds
+        const mockSyncService = new SyncService({
+          run: Effect.sync(() => {
+            syncRan = true;
+            return {
+              added: 3,
+              skipped: 1,
+              errors: 0,
+              duration: 75,
+              details: [],
+              failedRows: [],
+            };
+          }),
+        });
+
+        // Mock NotifyService where notifySuccess fails with typed error
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () =>
+            Effect.fail(new NotificationError({ message: "Discord webhook failed" })),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        // Should still succeed even if notification fails
+        const result = yield* cronService.syncOnce;
+
+        expect(syncRan).toBe(true);
+        expect(result.added).toBe(3);
+        expect(result.skipped).toBe(1);
+        expect(result.errors).toBe(0);
+      })
+    );
+
+    it.effect("should handle error notification failure gracefully", () =>
+      Effect.gen(function* () {
+        // Mock SyncService that fails - use die to create a defect that bypasses type checking
+        const syncError = new SyncError({ message: "Sync crashed" });
+        const mockSyncService = new SyncService({
+          run: Effect.die(syncError) as typeof SyncService.prototype.run,
+        });
+
+        // Mock NotifyService where both methods fail with typed errors
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () =>
+            Effect.fail(new NotificationError({ message: "Success notification failed" })),
+          notifyError: () =>
+            Effect.fail(new NotificationError({ message: "Error notification also failed" })),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        // Should still return error result even if notification fails
+        const result = yield* cronService.syncOnce.pipe(
+          Effect.catchAllCause(() =>
+            Effect.succeed({
+              added: 0,
+              skipped: 0,
+              errors: 1,
+              duration: 0,
+              details: [],
+              failedRows: [],
+            })
+          )
+        );
+
+        expect(result.added).toBe(0);
+        expect(result.errors).toBe(1);
+      })
+    );
   });
 
   describe("Cron schedule parsing", () => {

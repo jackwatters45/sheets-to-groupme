@@ -11,6 +11,7 @@
     "check": "biome check .",
     "start": "bun run src/main.ts",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepare": "effect-language-service patch"
   },
   "dependencies": {

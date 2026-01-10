@@ -10,10 +10,6 @@ on:
   pull_request_review:
     types: [submitted]
 
-concurrency:
-  group: claude-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   claude:
     if: |
@@ -51,3 +47,4 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr:*)'
+

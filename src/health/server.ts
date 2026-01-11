@@ -1,54 +1,72 @@
 import { createServer } from "node:http";
-import { HttpClient, HttpRouter, HttpServer, HttpServerResponse } from "@effect/platform";
-import { NodeHttpClient, NodeHttpServer } from "@effect/platform-node";
-import { Console, Duration, Effect, Layer } from "effect";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpRouter,
+  HttpServer,
+  HttpServerResponse,
+} from "@effect/platform";
+import { NodeHttpServer } from "@effect/platform-node";
+import { Console, Data, Duration, Effect, Layer } from "effect";
 
 /**
- * Health check - verifies connectivity to Google Sheets API
+ * Error for readiness check failures
  */
-export const checkHealth = Effect.gen(function* () {
+export class ReadinessError extends Data.TaggedError("ReadinessError")<{
+  readonly message: string;
+}> {}
+
+/**
+ * GET /health - Simple liveness check
+ */
+const healthHandler = HttpServerResponse.json({ status: "ok" });
+
+/**
+ * GET /ready - Readiness check (verifies outbound connectivity)
+ */
+const readyHandler = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
   yield* client.head("https://sheets.googleapis.com").pipe(
-    Effect.timeout(Duration.seconds(2)),
-    Effect.mapError(() => new Error("Google Sheets API unreachable"))
+    Effect.timeout(Duration.seconds(5)),
+    Effect.mapError(() => new ReadinessError({ message: "Google Sheets API unreachable" }))
   );
-  return { status: "healthy" as const };
-});
-
-/**
- * Health endpoint handler
- */
-const healthHandler = checkHealth.pipe(
-  Effect.matchEffect({
-    onSuccess: (health) => HttpServerResponse.json(health),
-    onFailure: (error) =>
-      HttpServerResponse.json({ status: "unhealthy", error: error.message }, { status: 503 }),
-  })
+  return yield* HttpServerResponse.json({ status: "ready" });
+}).pipe(
+  Effect.catchAll((error) =>
+    HttpServerResponse.json(
+      { status: "not ready", error: "message" in error ? error.message : "Unknown error" },
+      { status: 503 }
+    )
+  )
 );
 
 /**
- * Health endpoint router
+ * Router with health endpoints
  */
-const healthApp = HttpRouter.empty.pipe(HttpRouter.get("/health", healthHandler));
+const app = HttpRouter.empty.pipe(
+  HttpRouter.get("/health", healthHandler),
+  HttpRouter.get("/ready", readyHandler)
+);
 
 /**
- * Health server layer - serves health endpoint on port 8080
+ * Health server layer - serves on port 8080
  */
-export const HealthServerLive = HttpServer.serve(healthApp).pipe(
+export const HealthServerLive = HttpServer.serve(app).pipe(
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 8080 })),
-  Layer.provide(NodeHttpClient.layerUndici)
+  Layer.provide(FetchHttpClient.layer)
 );
 
 /**
- * Wait for network to be ready by polling health check
+ * Wait for network to be ready by polling /ready endpoint
  */
 export const waitForNetwork = Effect.gen(function* () {
   yield* Console.log("[INFO] Checking network readiness...");
+  const client = yield* HttpClient.HttpClient;
   const maxAttempts = 30; // 30 attempts * 2s = 60s max wait
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const isReady = yield* checkHealth.pipe(
-      Effect.map(() => true),
+    const isReady = yield* client.get("http://localhost:8080/ready").pipe(
+      Effect.flatMap((res) => Effect.succeed(res.status === 200)),
       Effect.catchAll(() => Effect.succeed(false))
     );
 
@@ -61,4 +79,4 @@ export const waitForNetwork = Effect.gen(function* () {
   }
 
   yield* Console.warn("[WARN] Network readiness check timed out after 60s, proceeding anyway");
-}).pipe(Effect.provide(NodeHttpClient.layerUndici));
+}).pipe(Effect.provide(FetchHttpClient.layer));

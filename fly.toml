@@ -11,10 +11,6 @@ primary_region = 'sjc'
 [env]
   BUN_ENV = 'production'
 
-[[mounts]]
-  source = 'sheets_data'
-  destination = '/app/data'
-
 [http_service]
   internal_port = 8080
   force_https = true
@@ -28,7 +24,3 @@ primary_region = 'sjc'
   memory = '1gb'
   cpus = 1
   memory_mb = 1024
-
-[[statics]]
-  guest_path = '/app/data'
-  url_prefix = '/data/'

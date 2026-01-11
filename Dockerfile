@@ -25,10 +25,7 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy source code
 COPY --from=builder /app/src ./src
 
-# Create data directory for state persistence (bun image already has non-root user)
-RUN mkdir -p /app/data && chown -R bun:bun /app
-
-# Switch to non-root user
+# Switch to non-root user (bun image already has non-root user)
 USER bun
 
 # Expose the port (Fly.io uses PORT env var)

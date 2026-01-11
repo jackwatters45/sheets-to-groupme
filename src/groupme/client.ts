@@ -13,12 +13,68 @@ class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
   response: Schema.optional(UserInfo),
 }) {}
 
-class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
+export class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
   user_id: Schema.String,
   nickname: Schema.String,
   email: Schema.optional(Schema.String),
   phone_number: Schema.optional(Schema.String),
 }) {}
+
+/**
+ * Normalize phone number by stripping all non-digit characters
+ */
+export const normalizePhone = (phone: string): string => phone.replace(/\D/g, "");
+
+/**
+ * Check if contact name matches member nickname (case-insensitive)
+ */
+export const matchesByName = (
+  contactName: string | undefined,
+  memberNickname: string | undefined
+): boolean => {
+  if (!contactName || !memberNickname) return false;
+  return memberNickname.toLowerCase() === contactName.toLowerCase();
+};
+
+/**
+ * Check if contact email matches member email (case-insensitive)
+ */
+export const matchesByEmail = (
+  contactEmail: string | undefined,
+  memberEmail: string | undefined
+): boolean => {
+  if (!contactEmail || !memberEmail) return false;
+  return memberEmail.toLowerCase() === contactEmail.toLowerCase();
+};
+
+/**
+ * Check if contact phone matches member phone (normalized to digits only)
+ */
+export const matchesByPhone = (
+  contactPhone: string | undefined,
+  memberPhone: string | undefined
+): boolean => {
+  if (!contactPhone || !memberPhone) return false;
+  return normalizePhone(memberPhone) === normalizePhone(contactPhone);
+};
+
+/**
+ * Check if a contact is already in the group by matching name, email, or phone.
+ * - Name comparison is case-insensitive
+ * - Email comparison is case-insensitive
+ * - Phone comparison normalizes both to digits only
+ */
+export const isContactInGroup = (
+  contact: { name?: string | undefined; email?: string | undefined; phone?: string | undefined },
+  members: readonly GroupMember[]
+): boolean => {
+  return members.some(
+    (member) =>
+      matchesByName(contact.name, member.nickname) ||
+      matchesByEmail(contact.email, member.email) ||
+      matchesByPhone(contact.phone, member.phone_number)
+  );
+};
 
 class GroupResponseData extends Schema.Class<GroupResponseData>("GroupResponseData")({
   members: Schema.optional(Schema.Array(GroupMember)),

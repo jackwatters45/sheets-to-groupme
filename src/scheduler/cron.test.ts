@@ -10,9 +10,8 @@ vi.mock("google-auth-library", () => ({
 }));
 
 import { NotificationError, NotifyService } from "../error/notify";
-import { ColumnMappingError, GoogleSheetsService } from "../google/client";
+import { ColumnMappingError, GoogleAuthError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
-import { StateError } from "../state/store";
 import { SyncService } from "../sync/sync";
 import { createTestConfig } from "../test/config";
 import { createGoogleTestLayer, createGroupMeTestLayer } from "../test/helpers";
@@ -122,10 +121,10 @@ describe("Cron Scheduler", () => {
       Effect.gen(function* () {
         let notifyErrorCalled = false;
 
-        // Mock SyncService that fails with a StateError (valid error type for SyncService.run)
+        // Mock SyncService that fails with a GoogleAuthError (valid error type for SyncService.run)
         const mockSyncService = new SyncService({
           run: Effect.fail(
-            new StateError({ message: "State file corrupted" })
+            new GoogleAuthError({ message: "Authentication failed" })
           ) as typeof SyncService.prototype.run,
         });
 
@@ -209,10 +208,10 @@ describe("Cron Scheduler", () => {
 
     it.effect("should handle error notification failure gracefully", () =>
       Effect.gen(function* () {
-        // Mock SyncService that fails with a StateError (valid error type)
+        // Mock SyncService that fails with a GoogleAuthError (valid error type)
         const mockSyncService = new SyncService({
           run: Effect.fail(
-            new StateError({ message: "Sync crashed" })
+            new GoogleAuthError({ message: "Sync crashed" })
           ) as typeof SyncService.prototype.run,
         });
 
@@ -251,7 +250,7 @@ describe("Cron Scheduler", () => {
             callCount++;
             if (callCount < 3) {
               return Effect.fail(
-                new StateError({ message: `Transient error attempt ${callCount}` })
+                new GoogleAuthError({ message: `Transient error attempt ${callCount}` })
               ) as typeof SyncService.prototype.run;
             }
             return Effect.succeed({
@@ -303,7 +302,7 @@ describe("Cron Scheduler", () => {
           run: Effect.suspend(() => {
             callCount++;
             return Effect.fail(
-              new StateError({ message: `Persistent error attempt ${callCount}` })
+              new GoogleAuthError({ message: `Persistent error attempt ${callCount}` })
             ) as typeof SyncService.prototype.run;
           }),
         });

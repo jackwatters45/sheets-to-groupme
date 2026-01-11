@@ -7,14 +7,12 @@ import {
   type UserContact,
 } from "../core/schema";
 import { GoogleSheetsService } from "../google/client";
-import { type GroupMeMember, GroupMeService } from "../groupme/client";
 import {
-  StateService,
-  type SyncState,
-  generateRowId,
-  isDuplicateRow,
-  markRowAsProcessed,
-} from "../state/store";
+  type GroupMeMember,
+  GroupMeService,
+  type GroupMember,
+  isContactInGroup,
+} from "../groupme/client";
 
 export class SyncError extends Data.TaggedError("SyncError")<{
   readonly message: string;
@@ -24,11 +22,10 @@ export class SyncError extends Data.TaggedError("SyncError")<{
 const DEFAULT_RANGE = "A:Z";
 
 interface ProcessingContext {
-  state: SyncState;
+  existingMembers: readonly GroupMember[];
   added: number;
   skipped: number;
   errors: number;
-  failedCount: number;
   details: SyncResultDetail[];
   failedRows: SyncResultFailedRow[];
 }
@@ -36,7 +33,6 @@ interface ProcessingContext {
 export class SyncService extends Effect.Service<SyncService>()("SyncService", {
   effect: Effect.gen(function* () {
     const config = yield* AppConfig;
-    const stateService = yield* StateService;
     const googleSheetsService = yield* GoogleSheetsService;
     const groupMeService = yield* GroupMeService;
 
@@ -46,35 +42,29 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       groupId: string
     ): Effect.Effect<ProcessingContext, never> =>
       Effect.gen(function* () {
-        const row = [contact.name, contact.email || "", contact.phone || ""];
-        const rowId = yield* Effect.promise(() => generateRowId(row));
         const timestamp = new Date().toISOString();
 
-        if (isDuplicateRow(rowId, context.state)) {
-          const existingRow = context.state.processedRows.get(rowId);
-          const wasSuccessful = existingRow?.success ?? false;
-
-          if (wasSuccessful) {
-            const updatedState = markRowAsProcessed(context.state, rowId, false);
-            return {
-              state: updatedState,
-              added: context.added,
-              skipped: context.skipped + 1,
-              errors: context.errors,
-              failedCount: context.failedCount,
-              details: [
-                ...context.details,
-                new SyncResultDetail({
-                  rowId,
-                  name: contact.name,
-                  status: "skipped",
-                  error: "already_processed",
-                  timestamp,
-                }),
-              ],
-              failedRows: context.failedRows,
-            };
-          }
+        // Check if contact is already in the group
+        if (isContactInGroup(contact, context.existingMembers)) {
+          yield* Effect.logDebug(
+            `Skipping ${contact.name}: already in group (matched by name/email/phone)`
+          );
+          return {
+            existingMembers: context.existingMembers,
+            added: context.added,
+            skipped: context.skipped + 1,
+            errors: context.errors,
+            details: [
+              ...context.details,
+              new SyncResultDetail({
+                name: contact.name,
+                status: "skipped",
+                error: "already_in_group",
+                timestamp,
+              }),
+            ],
+            failedRows: context.failedRows,
+          };
         }
 
         const member: GroupMeMember = {
@@ -87,24 +77,23 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           Effect.catchAll((error) =>
             Effect.succeed({
               success: false,
-              alreadyExists: false,
+              alreadyExists: error._tag === "GroupMeMemberAlreadyExistsError",
               errorMessage: error.message,
             })
           )
         );
 
+        // Handle race condition: member added between our check and addMember call
         if (addResult.alreadyExists) {
-          const updatedState = markRowAsProcessed(context.state, rowId, false);
+          yield* Effect.logDebug(`Skipping ${contact.name}: already exists in GroupMe`);
           return {
-            state: updatedState,
+            existingMembers: context.existingMembers,
             added: context.added,
             skipped: context.skipped + 1,
             errors: context.errors,
-            failedCount: context.failedCount,
             details: [
               ...context.details,
               new SyncResultDetail({
-                rowId,
                 name: contact.name,
                 status: "skipped",
                 error: "already_exists",
@@ -121,15 +110,13 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           yield* Effect.logError(`Failed to add member ${contact.name}: ${errorMessage}`);
 
           return {
-            state: context.state,
+            existingMembers: context.existingMembers,
             added: context.added,
             skipped: context.skipped,
             errors: context.errors + 1,
-            failedCount: context.failedCount + 1,
             details: [
               ...context.details,
               new SyncResultDetail({
-                rowId,
                 name: contact.name,
                 status: "error",
                 error: errorMessage,
@@ -139,7 +126,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
             failedRows: [
               ...context.failedRows,
               new SyncResultFailedRow({
-                rowId,
                 contact,
                 error: errorMessage,
                 timestamp,
@@ -148,17 +134,14 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           };
         }
 
-        const updatedState = markRowAsProcessed(context.state, rowId, true);
         return {
-          state: updatedState,
+          existingMembers: context.existingMembers,
           added: context.added + 1,
           skipped: context.skipped,
           errors: context.errors,
-          failedCount: context.failedCount,
           details: [
             ...context.details,
             new SyncResultDetail({
-              rowId,
               name: contact.name,
               status: "added",
               timestamp,
@@ -181,6 +164,20 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       const startTime = Date.now();
 
       yield* Effect.logInfo("Starting sync...");
+
+      // Fetch current group members from GroupMe
+      // Fail fast if we can't get members - proceeding without them would disable duplicate detection
+      const existingMembers = yield* groupMeService.getMembers(config.groupme.groupId).pipe(
+        Effect.mapError(
+          (error) =>
+            new SyncError({
+              message: `Cannot sync without member list - duplicate detection would be disabled: ${error.message}`,
+              cause: error,
+            })
+        )
+      );
+
+      yield* Effect.logInfo(`Found ${existingMembers.length} existing members in group`);
 
       const rows = yield* googleSheetsService.fetchRows(config.google.sheetId, DEFAULT_RANGE);
 
@@ -218,14 +215,11 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
       yield* Effect.logInfo(`Found ${userContacts.length} user contacts`);
 
-      const currentState = yield* stateService.load;
-
       const initialContext: ProcessingContext = {
-        state: currentState,
+        existingMembers,
         added: 0,
         skipped: 0,
         errors: 0,
-        failedCount: 0,
         details: [],
         failedRows: [],
       };
@@ -235,8 +229,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
         initialContext,
         config.groupme.groupId
       );
-
-      yield* stateService.save(finalContext.state);
 
       const duration = Date.now() - startTime;
       yield* Effect.logInfo(
@@ -255,5 +247,5 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
     return { run };
   }),
-  dependencies: [StateService.Default, GoogleSheetsService.Default, GroupMeService.Default],
+  dependencies: [GoogleSheetsService.Default, GroupMeService.Default],
 }) {}

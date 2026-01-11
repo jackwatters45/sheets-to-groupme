@@ -1,0 +1,45 @@
+Ralph Progress Log
+Started: 2026-01-11T12:50:00+11:00
+Previous: plans/archive/v1.0.0/
+
+--- Session History ---
+
+[groupme-001] COMPLETE
+Summary: Exported GroupMember class and added isContactInGroup/normalizePhone utility functions
+Files: src/groupme/client.ts, biome.json
+Gotchas: Added plans/ to biome ignore to avoid formatting PRD files
+
+[sync-001] COMPLETE
+Summary: Refactored SyncService to use live GroupMe members instead of file-based state
+Files: src/sync/sync.ts, src/sync/sync.test.ts, src/scheduler/cron.test.ts
+Gotchas:
+- Tests needed StateError replaced with GoogleAuthError
+- Added tests for email and phone matching (case-insensitive, normalized)
+
+[test-001] COMPLETE
+Summary: Updated sync.test.ts for new architecture (done as part of sync-001)
+
+[cleanup-001] COMPLETE
+Summary: Removed state module entirely
+Files: src/state/store.ts (deleted), src/state/store.test.ts (deleted), src/test/helpers.ts (removed createMockState)
+
+[cleanup-002] COMPLETE
+Summary: Removed volume mount and statics from fly.toml, no data dir changes needed in Dockerfile
+Files: fly.toml (removed [[mounts]] and [[statics]] sections)
+
+[schema-001] COMPLETE
+Summary: Removed rowId from SyncResultDetail and SyncResultFailedRow schemas
+Files: src/core/schema.ts, src/core/schema.test.ts, src/sync/sync.ts, src/sync/sync.test.ts
+Gotchas: Also removed generateRowId function from sync.ts
+
+[test-002] COMPLETE
+Summary: All CI checks pass (typecheck, biome check, vitest)
+
+[groupme-002] COMPLETE
+Summary: Added nickname/name matching to isContactInGroup (case-insensitive)
+Files: src/groupme/client.ts, src/sync/sync.test.ts
+
+---
+Archived: 2026-01-11T17:23:00+11:00
+Version: v1.1.0
+Features: 8/8 passing

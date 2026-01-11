@@ -29,13 +29,13 @@ class GroupResponse extends Schema.Class<GroupResponse>("GroupResponse")({
   response: Schema.optional(GroupResponseData),
 }) {}
 
-class AddMemberResultItem extends Schema.Class<AddMemberResultItem>("AddMemberResultItem")({
+class AddMemberResult extends Schema.Class<AddMemberResult>("AddMemberResult")({
   member_id: Schema.String,
   user_id: Schema.String,
 }) {}
 
 class AddMemberResponseData extends Schema.Class<AddMemberResponseData>("AddMemberResponseData")({
-  results: Schema.optional(Schema.Array(AddMemberResultItem)),
+  results: Schema.optional(Schema.Array(AddMemberResult)),
 }) {}
 
 class AddMemberResponse extends Schema.Class<AddMemberResponse>("AddMemberResponse")({
@@ -46,13 +46,6 @@ export interface GroupMeMember {
   nickname: string;
   email?: string;
   phone_number?: string;
-}
-
-export interface AddMemberResult {
-  success: boolean;
-  memberId?: string;
-  userId?: string;
-  alreadyExists?: boolean;
 }
 
 export class GroupMeApiError extends Data.TaggedError("GroupMeApiError")<{

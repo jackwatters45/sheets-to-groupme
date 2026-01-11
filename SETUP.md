@@ -25,12 +25,6 @@ These sections need to be completed by you (Jack). Once done, send the configura
 | John Doe   | john@example.com | +1234567890 |
 | Jane Smith | jane@example.com | +0987654321 |
 
-### Get Your Group ID
-
-1. In GroupMe, open your group and tap **Share** → **Share Group Link**
-2. The link will look like: `https://groupme.com/join_group/12345678/AbCdEf`
-3. The Group ID is the first number after `join_group/`: `12345678`
-
 ---
 
 ## Setup (For Harry)
@@ -73,7 +67,6 @@ To add members via the API, we need an access token from a group admin.
 
 Once complete, send Jack:
 
-- **Group ID** (from the share link)
 - **Access Token** (if using Option B)
 
 ---

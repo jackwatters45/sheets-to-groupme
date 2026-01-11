@@ -1,7 +1,46 @@
 import { HttpBody, HttpClient, HttpClientRequest } from "@effect/platform";
 import { NodeHttpClient } from "@effect/platform-node";
-import { Data, Effect } from "effect";
+import { Data, Effect, Schema } from "effect";
 import { AppConfig } from "../config";
+
+// Schemas for GroupMe API responses
+const UserResponse = Schema.Struct({
+  response: Schema.optional(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      email: Schema.String,
+    })
+  ),
+});
+
+const GroupMemberSchema = Schema.Struct({
+  user_id: Schema.String,
+  nickname: Schema.String,
+  email: Schema.optional(Schema.String),
+  phone_number: Schema.optional(Schema.String),
+});
+
+const GroupResponse = Schema.Struct({
+  response: Schema.optional(
+    Schema.Struct({
+      members: Schema.optional(Schema.Array(GroupMemberSchema)),
+    })
+  ),
+});
+
+const AddMemberResultSchema = Schema.Struct({
+  member_id: Schema.String,
+  user_id: Schema.String,
+});
+
+const AddMemberResponse = Schema.Struct({
+  response: Schema.optional(
+    Schema.Struct({
+      results: Schema.optional(Schema.Array(AddMemberResultSchema)),
+    })
+  ),
+});
 
 export interface GroupMeMember {
   nickname: string;
@@ -44,9 +83,9 @@ export class GroupMeService extends Effect.Service<GroupMeService>()("GroupMeSer
       HttpClient.mapRequest(HttpClientRequest.setHeader("Accept", "application/json"))
     );
 
-    // Helper to handle response with custom error mapping
+    // Helper to handle response with schema validation
     const handleResponse =
-      <T>(context: string) =>
+      <A, I>(context: string, schema: Schema.Schema<A, I>) =>
       (res: import("@effect/platform/HttpClientResponse").HttpClientResponse) =>
         Effect.gen(function* () {
           if (res.status === 401) {
@@ -64,7 +103,16 @@ export class GroupMeService extends Effect.Service<GroupMeService>()("GroupMeSer
                   new GroupMeApiError({ message: `${context}: Failed to parse JSON`, cause: e })
               )
             );
-            return json as T;
+            const validated = yield* Schema.decodeUnknown(schema)(json).pipe(
+              Effect.mapError(
+                (e) =>
+                  new GroupMeApiError({
+                    message: `${context}: Invalid response schema - ${e.message}`,
+                    cause: e,
+                  })
+              )
+            );
+            return validated;
           }
 
           const errorBody = yield* res.text.pipe(
@@ -84,11 +132,7 @@ export class GroupMeService extends Effect.Service<GroupMeService>()("GroupMeSer
     const validateToken = Effect.gen(function* () {
       const url = `/v3/users/me?token=${config.groupme.accessToken}`;
       const response = yield* httpClient.get(url).pipe(
-        Effect.flatMap(
-          handleResponse<{ response?: { id: string; name: string; email: string } }>(
-            "Token validation failed"
-          )
-        ),
+        Effect.flatMap(handleResponse("Token validation failed", UserResponse)),
         Effect.mapError((error) =>
           error instanceof GroupMeUnauthorizedError || error instanceof GroupMeApiError
             ? error
@@ -104,18 +148,7 @@ export class GroupMeService extends Effect.Service<GroupMeService>()("GroupMeSer
         const url = `/v3/groups/${targetGroupId}?token=${config.groupme.accessToken}`;
 
         const response = yield* httpClient.get(url).pipe(
-          Effect.flatMap(
-            handleResponse<{
-              response?: {
-                members?: Array<{
-                  user_id: string;
-                  nickname: string;
-                  email?: string;
-                  phone_number?: string;
-                }>;
-              };
-            }>("Failed to get group members")
-          ),
+          Effect.flatMap(handleResponse("Failed to get group members", GroupResponse)),
           Effect.mapError((error) =>
             error instanceof GroupMeUnauthorizedError || error instanceof GroupMeApiError
               ? error
@@ -154,14 +187,21 @@ export class GroupMeService extends Effect.Service<GroupMeService>()("GroupMeSer
                 }
 
                 if (res.status >= 200 && res.status < 300) {
-                  const data = (yield* res.json.pipe(
+                  const json = yield* res.json.pipe(
                     Effect.mapError(
                       (e) =>
                         new GroupMeApiError({ message: "Failed to parse JSON response", cause: e })
                     )
-                  )) as {
-                    response?: { results?: Array<{ member_id: string; user_id: string }> };
-                  };
+                  );
+                  const data = yield* Schema.decodeUnknown(AddMemberResponse)(json).pipe(
+                    Effect.mapError(
+                      (e) =>
+                        new GroupMeApiError({
+                          message: `Invalid response schema - ${e.message}`,
+                          cause: e,
+                        })
+                    )
+                  );
                   const addResult = data.response?.results?.[0];
                   return {
                     success: true,

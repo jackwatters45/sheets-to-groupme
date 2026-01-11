@@ -1,7 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Config, ConfigProvider, Effect, Layer, Option } from "effect";
 import { createTestConfig } from "../test/config";
-import { createNotifyTestLayer } from "../test/helpers";
+import {
+  createNotifyNetworkErrorLayer,
+  createNotifyTestLayer,
+  createRequestCapture,
+} from "../test/helpers";
 import {
   DiscordEmbed,
   DiscordEmbedField,
@@ -86,43 +90,29 @@ describe("NotifyService", () => {
   describe("notifyError", () => {
     it.effect("should send error notification to Discord", () => {
       const testConfig = createTestConfig();
-      const capturedRequests: Array<{ url: string; method: string }> = [];
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
         const service = yield* NotifyService;
         yield* service.notifyError(new Error("Test error message"));
 
         // Request was captured by mock handler - verify it was called
-        expect(capturedRequests.length).toBe(1);
-        expect(capturedRequests[0].url).toContain("discord.com/api/webhooks");
-        expect(capturedRequests[0].method).toBe("POST");
-      }).pipe(
-        Effect.provide(
-          createNotifyTestLayer(testConfig, (req) => {
-            capturedRequests.push(req);
-            return { status: 200, body: {} };
-          })
-        )
-      );
+        expect(requests).toHaveLength(1);
+        expect(requests[0].url).toContain("discord.com/api/webhooks");
+        expect(requests[0].method).toBe("POST");
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should handle non-Error objects", () => {
       const testConfig = createTestConfig();
-      const capturedRequests: Array<{ url: string; method: string }> = [];
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
         const service = yield* NotifyService;
         yield* service.notifyError("String error");
 
-        expect(capturedRequests.length).toBe(1);
-      }).pipe(
-        Effect.provide(
-          createNotifyTestLayer(testConfig, (req) => {
-            capturedRequests.push(req);
-            return { status: 200, body: {} };
-          })
-        )
-      );
+        expect(requests).toHaveLength(1);
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should return NotificationError on Discord API failure", () => {
@@ -145,46 +135,48 @@ describe("NotifyService", () => {
         )
       );
     });
+
+    it.effect("should return NotificationError on network-level failure", () => {
+      const testConfig = createTestConfig();
+
+      return Effect.gen(function* () {
+        const service = yield* NotifyService;
+        const result = yield* Effect.either(service.notifyError(new Error("Test")));
+
+        expect(result._tag).toBe("Left");
+        if (result._tag === "Left") {
+          expect(result.left).toBeInstanceOf(NotificationError);
+          // Network errors are wrapped as RequestError with "Transport error" message
+          expect(result.left.message).toContain("Transport error");
+        }
+      }).pipe(Effect.provide(createNotifyNetworkErrorLayer(testConfig, "Connection refused")));
+    });
   });
 
   describe("notifySuccess", () => {
     it.effect("should send success notification with green color when no errors", () => {
       const testConfig = createTestConfig();
-      const capturedRequests: Array<{ url: string; method: string }> = [];
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
         const service = yield* NotifyService;
         yield* service.notifySuccess({ added: 5, skipped: 2, errors: 0 });
 
-        expect(capturedRequests.length).toBe(1);
-        expect(capturedRequests[0].method).toBe("POST");
-      }).pipe(
-        Effect.provide(
-          createNotifyTestLayer(testConfig, (req) => {
-            capturedRequests.push(req);
-            return { status: 200, body: {} };
-          })
-        )
-      );
+        expect(requests).toHaveLength(1);
+        expect(requests[0].method).toBe("POST");
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should send success notification with yellow color when errors exist", () => {
       const testConfig = createTestConfig();
-      const capturedRequests: Array<{ url: string; method: string }> = [];
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
         const service = yield* NotifyService;
         yield* service.notifySuccess({ added: 3, skipped: 1, errors: 2 });
 
-        expect(capturedRequests.length).toBe(1);
-      }).pipe(
-        Effect.provide(
-          createNotifyTestLayer(testConfig, (req) => {
-            capturedRequests.push(req);
-            return { status: 200, body: {} };
-          })
-        )
-      );
+        expect(requests).toHaveLength(1);
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should return NotificationError on Discord API failure", () => {

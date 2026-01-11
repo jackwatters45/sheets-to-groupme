@@ -1,4 +1,4 @@
-import { HttpClient, HttpClientResponse } from "@effect/platform";
+import { HttpClient, HttpClientError, HttpClientResponse } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { NotifyService } from "../error/notify";
 import { GoogleAuthService, GoogleSheetsService } from "../google/client";
@@ -14,6 +14,37 @@ export interface MockHttpResponse {
   body?: unknown;
   headers?: Record<string, string>;
 }
+
+/**
+ * Request capture info for testing HTTP calls.
+ */
+export interface CapturedRequest {
+  url: string;
+  method: string;
+  body?: unknown;
+}
+
+/**
+ * Creates a request capture utility for testing HTTP calls.
+ * Returns a tuple of [capturedRequests array, handler function].
+ *
+ * @example
+ * const [requests, handler] = createRequestCapture({ status: 200, body: {} });
+ * const layer = createNotifyTestLayer(config, handler);
+ * // After test runs:
+ * expect(requests).toHaveLength(1);
+ * expect(requests[0].url).toContain('/api/webhooks');
+ */
+export const createRequestCapture = (
+  response: MockHttpResponse = { status: 200, body: {} }
+): [CapturedRequest[], (req: CapturedRequest) => MockHttpResponse] => {
+  const capturedRequests: CapturedRequest[] = [];
+  const handler = (req: CapturedRequest): MockHttpResponse => {
+    capturedRequests.push(req);
+    return response;
+  };
+  return [capturedRequests, handler];
+};
 
 /**
  * Creates a mock HttpClient that returns configured responses.
@@ -45,6 +76,27 @@ export const createMockHttpClient = (
       return HttpClientResponse.fromWeb(req, response);
     })
   );
+
+/**
+ * Creates a mock HttpClient that fails with a network-level error.
+ * Useful for testing error handling when the HTTP request itself fails.
+ */
+export const createNetworkErrorHttpClient = (errorMessage: string) =>
+  HttpClient.make((req) =>
+    Effect.fail(
+      new HttpClientError.RequestError({
+        request: req,
+        reason: "Transport",
+        cause: new Error(errorMessage),
+      })
+    )
+  );
+
+/**
+ * Creates a mock HttpClient layer that fails with a network error.
+ */
+export const createNetworkErrorHttpClientLayer = (errorMessage: string) =>
+  Layer.succeed(HttpClient.HttpClient, createNetworkErrorHttpClient(errorMessage));
 
 /**
  * Creates a mock HttpClient layer from a handler function.
@@ -122,6 +174,19 @@ export const createNotifyTestLayer = (
   const httpLayer = mockHandler
     ? createMockHttpClientLayer(mockHandler)
     : createSimpleMockHttpClientLayer({ status: 200, body: {} });
+
+  return NotifyService.DefaultWithoutDependencies.pipe(
+    Layer.provide(httpLayer),
+    Layer.provide(configLayer)
+  );
+};
+
+/**
+ * Creates a test layer for NotifyService that simulates network failures.
+ */
+export const createNotifyNetworkErrorLayer = (config: TestConfig, errorMessage: string) => {
+  const configLayer = Layer.setConfigProvider(createTestConfigProvider(config));
+  const httpLayer = createNetworkErrorHttpClientLayer(errorMessage);
 
   return NotifyService.DefaultWithoutDependencies.pipe(
     Layer.provide(httpLayer),

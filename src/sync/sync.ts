@@ -166,12 +166,15 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       yield* Effect.logInfo("Starting sync...");
 
       // Fetch current group members from GroupMe
+      // Fail fast if we can't get members - proceeding without them would disable duplicate detection
       const existingMembers = yield* groupMeService.getMembers(config.groupme.groupId).pipe(
-        Effect.catchAll((error) => {
-          return Effect.logError(
-            `Failed to fetch members (may indicate API credential issue): ${error.message}`
-          ).pipe(Effect.map(() => [] as readonly GroupMember[]));
-        })
+        Effect.mapError(
+          (error) =>
+            new SyncError({
+              message: `Cannot sync without member list - duplicate detection would be disabled: ${error.message}`,
+              cause: error,
+            })
+        )
       );
 
       yield* Effect.logInfo(`Found ${existingMembers.length} existing members in group`);

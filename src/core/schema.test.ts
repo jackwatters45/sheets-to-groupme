@@ -74,18 +74,16 @@ describe("UserContact Schema", () => {
 describe("SyncResultDetail Schema", () => {
   it("should create instance with all fields", () => {
     const detail = new schema.SyncResultDetail({
-      rowId: "abc123",
       name: "John Doe",
       status: "added",
       timestamp: "2024-01-01T00:00:00.000Z",
     });
-    expect(detail.rowId).toBe("abc123");
+    expect(detail.name).toBe("John Doe");
     expect(detail.status).toBe("added");
   });
 
   it("should create instance without optional fields", () => {
     const detail = new schema.SyncResultDetail({
-      rowId: "abc123",
       name: "John Doe",
       status: "skipped",
     });
@@ -97,19 +95,17 @@ describe("SyncResultDetail Schema", () => {
     expect(
       () =>
         new schema.SyncResultDetail({
-          rowId: "abc123",
           name: "John",
           status: "invalid" as "added",
         })
     ).toThrow();
   });
 
-  it("should reject empty rowId", () => {
+  it("should reject empty name", () => {
     expect(
       () =>
         new schema.SyncResultDetail({
-          rowId: "",
-          name: "John",
+          name: "",
           status: "added",
         })
     ).toThrow();
@@ -117,24 +113,22 @@ describe("SyncResultDetail Schema", () => {
 
   it("should decode from plain object", () => {
     const plain = {
-      rowId: "abc123",
       name: "John",
       status: "added" as const,
     };
     const result = Schema.decodeUnknownSync(schema.SyncResultDetail)(plain);
-    expect(result.rowId).toBe("abc123");
+    expect(result.name).toBe("John");
   });
 });
 
 describe("SyncResultFailedRow Schema", () => {
   it("should create instance", () => {
     const failedRow = new schema.SyncResultFailedRow({
-      rowId: "abc123",
       contact: new schema.UserContact({ name: "John Doe" }),
       error: "Already exists",
       timestamp: "2024-01-01T00:00:00.000Z",
     });
-    expect(failedRow.rowId).toBe("abc123");
+    expect(failedRow.contact.name).toBe("John Doe");
     expect(failedRow.error).toBe("Already exists");
   });
 
@@ -142,7 +136,6 @@ describe("SyncResultFailedRow Schema", () => {
     expect(
       () =>
         new schema.SyncResultFailedRow({
-          rowId: "abc123",
           contact: new schema.UserContact({ name: "John" }),
           error: "",
           timestamp: "2024-01-01T00:00:00.000Z",
@@ -152,13 +145,12 @@ describe("SyncResultFailedRow Schema", () => {
 
   it("should decode from plain object", () => {
     const plain = {
-      rowId: "abc123",
       contact: { name: "John Doe" },
       error: "Failed",
       timestamp: "2024-01-01T00:00:00.000Z",
     };
     const result = Schema.decodeUnknownSync(schema.SyncResultFailedRow)(plain);
-    expect(result.rowId).toBe("abc123");
+    expect(result.contact.name).toBe("John Doe");
   });
 });
 
@@ -171,7 +163,6 @@ describe("SyncResult Schema", () => {
       duration: 1500,
       details: [
         new schema.SyncResultDetail({
-          rowId: "r1",
           name: "John",
           status: "added",
         }),
@@ -191,7 +182,6 @@ describe("SyncResult Schema", () => {
       details: [],
       failedRows: [
         new schema.SyncResultFailedRow({
-          rowId: "r1",
           contact: new schema.UserContact({ name: "Jane" }),
           error: "Already exists",
           timestamp: "2024-01-01T00:00:00.000Z",
@@ -219,7 +209,7 @@ describe("SyncResult Schema", () => {
       skipped: 2,
       errors: 1,
       duration: 1500,
-      details: [{ rowId: "r1", name: "John", status: "added" as const }],
+      details: [{ name: "John", status: "added" as const }],
       failedRows: [],
     };
     const result = Schema.decodeUnknownSync(schema.SyncResult)(plain);

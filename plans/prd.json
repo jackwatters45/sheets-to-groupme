@@ -15,7 +15,7 @@
     "id": "schema-001",
     "category": "refactor",
     "description": "Simplify SyncResultDetail and SyncResultFailedRow schemas",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Remove rowId from SyncResultDetail (no longer needed)",
       "Remove rowId from SyncResultFailedRow (no longer needed)",
@@ -75,7 +75,18 @@
     "id": "test-002",
     "category": "test",
     "description": "Verify CI passes with all changes",
-    "passes": false,
+    "passes": true,
     "steps": ["Run bun run typecheck", "Run bun run check", "Run bun run test"]
+  },
+  {
+    "id": "groupme-002",
+    "category": "refactor",
+    "description": "Add nickname matching to isContactInGroup",
+    "passes": false,
+    "steps": [
+      "Update isContactInGroup to also match by nickname/name",
+      "Handle case-insensitive name comparison",
+      "Add test for name matching in sync.test.ts"
+    ]
   }
 ]

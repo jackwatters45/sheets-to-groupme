@@ -30,14 +30,6 @@ interface ProcessingContext {
   failedRows: SyncResultFailedRow[];
 }
 
-/**
- * Generate a simple row identifier from contact data
- */
-const generateRowId = (contact: UserContact): string => {
-  const parts = [contact.name, contact.email || "", contact.phone || ""];
-  return parts.join("|").slice(0, 64);
-};
-
 export class SyncService extends Effect.Service<SyncService>()("SyncService", {
   effect: Effect.gen(function* () {
     const config = yield* AppConfig;
@@ -50,7 +42,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       groupId: string
     ): Effect.Effect<ProcessingContext, never> =>
       Effect.gen(function* () {
-        const rowId = generateRowId(contact);
         const timestamp = new Date().toISOString();
 
         // Check if contact is already in the group
@@ -63,7 +54,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
             details: [
               ...context.details,
               new SyncResultDetail({
-                rowId,
                 name: contact.name,
                 status: "skipped",
                 error: "already_in_group",
@@ -100,7 +90,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
             details: [
               ...context.details,
               new SyncResultDetail({
-                rowId,
                 name: contact.name,
                 status: "skipped",
                 error: "already_exists",
@@ -124,7 +113,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
             details: [
               ...context.details,
               new SyncResultDetail({
-                rowId,
                 name: contact.name,
                 status: "error",
                 error: errorMessage,
@@ -134,7 +122,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
             failedRows: [
               ...context.failedRows,
               new SyncResultFailedRow({
-                rowId,
                 contact,
                 error: errorMessage,
                 timestamp,
@@ -151,7 +138,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           details: [
             ...context.details,
             new SyncResultDetail({
-              rowId,
               name: contact.name,
               status: "added",
               timestamp,

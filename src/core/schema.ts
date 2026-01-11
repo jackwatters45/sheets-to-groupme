@@ -7,7 +7,6 @@ export class UserContact extends Schema.Class<UserContact>("UserContact")({
 }) {}
 
 export class SyncResultDetail extends Schema.Class<SyncResultDetail>("SyncResultDetail")({
-  rowId: Schema.NonEmptyTrimmedString,
   name: Schema.NonEmptyTrimmedString,
   status: Schema.Union(
     Schema.Literal("added"),
@@ -20,7 +19,6 @@ export class SyncResultDetail extends Schema.Class<SyncResultDetail>("SyncResult
 }) {}
 
 export class SyncResultFailedRow extends Schema.Class<SyncResultFailedRow>("SyncResultFailedRow")({
-  rowId: Schema.NonEmptyTrimmedString,
   contact: UserContact,
   error: Schema.NonEmptyTrimmedString,
   timestamp: Schema.NonEmptyTrimmedString,

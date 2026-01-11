@@ -26,3 +26,11 @@ Files: src/state/store.ts (deleted), src/state/store.test.ts (deleted), src/test
 [cleanup-002] COMPLETE
 Summary: Removed volume mount and statics from fly.toml, no data dir changes needed in Dockerfile
 Files: fly.toml (removed [[mounts]] and [[statics]] sections)
+
+[schema-001] COMPLETE
+Summary: Removed rowId from SyncResultDetail and SyncResultFailedRow schemas
+Files: src/core/schema.ts, src/core/schema.test.ts, src/sync/sync.ts, src/sync/sync.test.ts
+Gotchas: Also removed generateRowId function from sync.ts
+
+[test-002] COMPLETE
+Summary: All CI checks pass (typecheck, biome check, vitest)

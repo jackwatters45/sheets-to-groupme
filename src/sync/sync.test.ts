@@ -129,9 +129,7 @@ describe("SyncService", () => {
         skipped: 2,
         errors: 1,
         duration: 1500,
-        details: [
-          new SyncResultDetail({ rowId: "r1", name: "A", status: "added", timestamp: "t1" }),
-        ],
+        details: [new SyncResultDetail({ name: "A", status: "added", timestamp: "t1" })],
         failedRows: [],
       });
 

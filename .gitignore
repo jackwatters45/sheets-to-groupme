@@ -35,8 +35,5 @@ coverage
 # Vitest
 *.vitest-results.json
 
-# Fly.io
-fly.toml
-
 # Data directory (should be mounted on Fly.io)
 data

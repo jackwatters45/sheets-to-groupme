@@ -1,5 +1,4 @@
-import { HttpBody, HttpClient, HttpClientRequest } from "@effect/platform";
-import { NodeHttpClient } from "@effect/platform-node";
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "@effect/platform";
 import { Data, Effect, Schema } from "effect";
 import { AppConfig } from "../config";
 
@@ -262,5 +261,5 @@ export class GroupMeService extends Effect.Service<GroupMeService>()("GroupMeSer
 
     return { validateToken, getMembers, addMember };
   }),
-  dependencies: [NodeHttpClient.layerUndici],
+  dependencies: [FetchHttpClient.layer],
 }) {}

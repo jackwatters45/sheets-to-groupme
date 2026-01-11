@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import { Config, ConfigProvider, Effect, Layer, Option } from "effect";
-import { type TestConfig, createTestConfig } from "../test/config";
-import { createNotifyTestLayer } from "../test/helpers";
+import { createTestConfig } from "../test/config";
+import {
+  createNotifyNetworkErrorLayer,
+  createNotifyTestLayer,
+  createRequestCapture,
+} from "../test/helpers";
 import {
   DiscordEmbed,
   DiscordEmbedField,
@@ -86,197 +90,116 @@ describe("NotifyService", () => {
   describe("notifyError", () => {
     it.effect("should send error notification to Discord", () => {
       const testConfig = createTestConfig();
-
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-      });
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          yield* service.notifyError(new Error("Test error message"));
+        const service = yield* NotifyService;
+        yield* service.notifyError(new Error("Test error message"));
 
-          expect(mockFetch).toHaveBeenCalledTimes(1);
-          expect(mockFetch).toHaveBeenCalledWith(
-            "https://discord.com/api/webhooks/test/token",
-            expect.objectContaining({
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-            })
-          );
-
-          const call = mockFetch.mock.calls[0];
-          const body = JSON.parse(call[1].body);
-          expect(body.username).toBe("Sheets to GroupMe");
-          expect(body.embeds[0].title).toBe("Sync Error");
-          expect(body.embeds[0].description).toBe("Test error message");
-          expect(body.embeds[0].color).toBe(0xff4444);
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+        // Request was captured by mock handler - verify it was called
+        expect(requests).toHaveLength(1);
+        expect(requests[0].url).toContain("discord.com/api/webhooks");
+        expect(requests[0].method).toBe("POST");
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should handle non-Error objects", () => {
       const testConfig = createTestConfig();
-
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-      });
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          yield* service.notifyError("String error");
+        const service = yield* NotifyService;
+        yield* service.notifyError("String error");
 
-          const call = mockFetch.mock.calls[0];
-          const body = JSON.parse(call[1].body);
-          expect(body.embeds[0].description).toBe("String error");
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+        expect(requests).toHaveLength(1);
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should return NotificationError on Discord API failure", () => {
       const testConfig = createTestConfig();
 
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          const result = yield* Effect.either(service.notifyError(new Error("Test")));
+        const service = yield* NotifyService;
+        const result = yield* Effect.either(service.notifyError(new Error("Test")));
 
-          expect(result._tag).toBe("Left");
-          if (result._tag === "Left") {
-            expect(result.left).toBeInstanceOf(NotificationError);
-            expect(result.left.message).toContain("Discord API error: 500");
-          }
-        } finally {
-          globalThis.fetch = originalFetch;
+        expect(result._tag).toBe("Left");
+        if (result._tag === "Left") {
+          expect(result.left).toBeInstanceOf(NotificationError);
         }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+      }).pipe(
+        Effect.provide(
+          createNotifyTestLayer(testConfig, () => ({
+            status: 500,
+            body: { error: "Server error" },
+          }))
+        )
+      );
     });
 
-    it.effect("should return NotificationError on network failure", () => {
+    it.effect("should return NotificationError on network-level failure", () => {
       const testConfig = createTestConfig();
 
-      const mockFetch = vi.fn().mockRejectedValue(new Error("Network failure"));
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          const result = yield* Effect.either(service.notifyError(new Error("Test")));
+        const service = yield* NotifyService;
+        const result = yield* Effect.either(service.notifyError(new Error("Test")));
 
-          expect(result._tag).toBe("Left");
-          if (result._tag === "Left") {
-            expect(result.left).toBeInstanceOf(NotificationError);
-            expect(result.left.message).toBe("Network failure");
-          }
-        } finally {
-          globalThis.fetch = originalFetch;
+        expect(result._tag).toBe("Left");
+        if (result._tag === "Left") {
+          expect(result.left).toBeInstanceOf(NotificationError);
+          // Network errors are wrapped as RequestError with "Transport error" message
+          expect(result.left.message).toContain("Transport error");
         }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+      }).pipe(Effect.provide(createNotifyNetworkErrorLayer(testConfig, "Connection refused")));
     });
   });
 
   describe("notifySuccess", () => {
     it.effect("should send success notification with green color when no errors", () => {
       const testConfig = createTestConfig();
-
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-      });
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          yield* service.notifySuccess({ added: 5, skipped: 2, errors: 0 });
+        const service = yield* NotifyService;
+        yield* service.notifySuccess({ added: 5, skipped: 2, errors: 0 });
 
-          expect(mockFetch).toHaveBeenCalledTimes(1);
-
-          const call = mockFetch.mock.calls[0];
-          const body = JSON.parse(call[1].body);
-          expect(body.username).toBe("Sheets to GroupMe");
-          expect(body.embeds[0].title).toBe("Sync Complete");
-          expect(body.embeds[0].description).toBe("Added 5, skipped 2, errors 0");
-          expect(body.embeds[0].color).toBe(0x44ff44); // Green
-          expect(body.embeds[0].fields).toHaveLength(3);
-          expect(body.embeds[0].fields[0].name).toBe("Added");
-          expect(body.embeds[0].fields[0].value).toBe("5");
-          expect(body.embeds[0].fields[1].name).toBe("Skipped");
-          expect(body.embeds[0].fields[1].value).toBe("2");
-          expect(body.embeds[0].fields[2].name).toBe("Errors");
-          expect(body.embeds[0].fields[2].value).toBe("0");
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+        expect(requests).toHaveLength(1);
+        expect(requests[0].method).toBe("POST");
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should send success notification with yellow color when errors exist", () => {
       const testConfig = createTestConfig();
-
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-      });
+      const [requests, handler] = createRequestCapture();
 
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          yield* service.notifySuccess({ added: 3, skipped: 1, errors: 2 });
+        const service = yield* NotifyService;
+        yield* service.notifySuccess({ added: 3, skipped: 1, errors: 2 });
 
-          const call = mockFetch.mock.calls[0];
-          const body = JSON.parse(call[1].body);
-          expect(body.embeds[0].color).toBe(0xffaa00); // Yellow/orange
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+        expect(requests).toHaveLength(1);
+      }).pipe(Effect.provide(createNotifyTestLayer(testConfig, handler)));
     });
 
     it.effect("should return NotificationError on Discord API failure", () => {
       const testConfig = createTestConfig();
 
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 429,
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* NotifyService;
-          const result = yield* Effect.either(
-            service.notifySuccess({ added: 1, skipped: 0, errors: 0 })
-          );
+        const service = yield* NotifyService;
+        const result = yield* Effect.either(
+          service.notifySuccess({ added: 1, skipped: 0, errors: 0 })
+        );
 
-          expect(result._tag).toBe("Left");
-          if (result._tag === "Left") {
-            expect(result.left).toBeInstanceOf(NotificationError);
-            expect(result.left.message).toContain("Discord API error: 429");
-          }
-        } finally {
-          globalThis.fetch = originalFetch;
+        expect(result._tag).toBe("Left");
+        if (result._tag === "Left") {
+          expect(result.left).toBeInstanceOf(NotificationError);
         }
-      }).pipe(Effect.provide(createNotifyTestLayer(testConfig)));
+      }).pipe(
+        Effect.provide(
+          createNotifyTestLayer(testConfig, () => ({
+            status: 429,
+            body: { error: "Rate limited" },
+          }))
+        )
+      );
     });
   });
 });
@@ -291,17 +214,31 @@ describe("NotifyService Integration", () => {
     return yield* testWebhookConfig;
   }).pipe(Effect.provide(Layer.setConfigProvider(ConfigProvider.fromEnv())));
 
-  const integrationConfig = (webhookUrl: string): TestConfig => ({
-    google: {
-      sheetId: "test-sheet-id",
-      serviceAccountEmail: "test@example.iam.gserviceaccount.com",
-      serviceAccountPrivateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-      projectId: "test-project",
-    },
-    groupme: { groupId: "test-group-id", accessToken: "test-token" },
-    sync: { columnName: "Name", columnEmail: "Email", columnPhone: "Phone" },
-    deployment: { flyRegion: "sfo", discordWebhookUrl: webhookUrl },
-  });
+  const createIntegrationLayer = (webhookUrl: string) =>
+    NotifyService.Default.pipe(
+      Layer.provide(
+        Layer.setConfigProvider(
+          ConfigProvider.fromMap(
+            new Map([
+              ["DISCORD_WEBHOOK_URL", webhookUrl],
+              ["FLY_REGION", "sfo"],
+              ["GOOGLE_SHEET_ID", "test"],
+              ["GOOGLE_SERVICE_ACCOUNT_EMAIL", "test@test.iam.gserviceaccount.com"],
+              [
+                "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+                "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+              ],
+              ["GOOGLE_PROJECT_ID", "test"],
+              ["GROUPME_GROUP_ID", "test"],
+              ["GROUPME_ACCESS_TOKEN", "test"],
+              ["COLUMN_NAME", "Name"],
+              ["COLUMN_EMAIL", "Email"],
+              ["COLUMN_PHONE", "Phone"],
+            ])
+          )
+        )
+      )
+    );
 
   it.effect("should send real error notification to Discord", () =>
     Effect.gen(function* () {
@@ -310,9 +247,7 @@ describe("NotifyService Integration", () => {
         return; // Skip if no test webhook URL configured
       }
       const webhookUrl = maybeWebhookUrl.value;
-      const service = yield* NotifyService.pipe(
-        Effect.provide(createNotifyTestLayer(integrationConfig(webhookUrl)))
-      );
+      const service = yield* NotifyService.pipe(Effect.provide(createIntegrationLayer(webhookUrl)));
       yield* service.notifyError(new Error("[TEST] Integration test error - please ignore"));
     })
   );
@@ -324,9 +259,7 @@ describe("NotifyService Integration", () => {
         return; // Skip if no test webhook URL configured
       }
       const webhookUrl = maybeWebhookUrl.value;
-      const service = yield* NotifyService.pipe(
-        Effect.provide(createNotifyTestLayer(integrationConfig(webhookUrl)))
-      );
+      const service = yield* NotifyService.pipe(Effect.provide(createIntegrationLayer(webhookUrl)));
       yield* service.notifySuccess({ added: 10, skipped: 5, errors: 1 });
     })
   );

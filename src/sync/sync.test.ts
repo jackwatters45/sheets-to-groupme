@@ -1,13 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { vi } from "vitest";
-
-// Hoisted mock for google-auth-library (must be before imports that use it)
-vi.mock("google-auth-library", () => ({
-  JWT: class MockJWT {
-    getAccessToken = () => Promise.resolve({ token: "mock_access_token" });
-  },
-}));
 
 import {
   SyncResult,
@@ -24,62 +16,109 @@ import { SyncError, SyncService } from "./sync";
 
 describe("SyncService", () => {
   describe("run - empty data", () => {
-    it.effect("should return empty result when no rows", () => {
-      const testConfig = createTestConfig();
+    const testConfig = createTestConfig();
+    const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(testConfig));
 
-      const mockFetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ values: [] }),
-      });
+    it.effect("should return empty result when no rows", () =>
+      Effect.gen(function* () {
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: () => Effect.succeed(undefined as undefined),
+        });
 
-      const testLayer = SyncService.Default.pipe(
-        Layer.provide(Layer.setConfigProvider(createTestConfigProvider(testConfig)))
-      );
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () => Effect.succeed([]),
+          parseUserContacts: () => Effect.succeed([]),
+        });
 
-      return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const syncService = yield* SyncService;
-          const result = yield* syncService.run;
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: "12345",
+              userId: "u12345",
+              alreadyExists: false,
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
 
-          expect(result.added).toBe(0);
-          expect(result.skipped).toBe(0);
-          expect(result.errors).toBe(0);
-          expect(result.details).toHaveLength(0);
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(testLayer));
-    });
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
 
-    it.effect("should return empty result when no valid contacts", () => {
-      const testConfig = createTestConfig();
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
 
-      const mockFetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ values: [["Name", "Email", "Phone"]] }),
-      });
+        const result = yield* syncService.run;
 
-      const testLayer = SyncService.Default.pipe(
-        Layer.provide(Layer.setConfigProvider(createTestConfigProvider(testConfig)))
-      );
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(0);
+        expect(result.details).toHaveLength(0);
+      })
+    );
 
-      return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const syncService = yield* SyncService;
-          const result = yield* syncService.run;
+    it.effect("should return empty result when no valid contacts", () =>
+      Effect.gen(function* () {
+        const mockStateService = new StateService({
+          load: Effect.succeed(createMockState()),
+          save: () => Effect.succeed(undefined as undefined),
+        });
 
-          expect(result.added).toBe(0);
-          expect(result.skipped).toBe(0);
-          expect(result.errors).toBe(0);
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(testLayer));
-    });
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () => Effect.succeed([["Name", "Email", "Phone"]]),
+          parseUserContacts: () => Effect.succeed([]),
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: "12345",
+              userId: "u12345",
+              alreadyExists: false,
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(StateService, mockStateService),
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(0);
+      })
+    );
   });
 
   describe("interface tests", () => {

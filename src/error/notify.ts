@@ -1,3 +1,5 @@
+import { HttpBody, HttpClient } from "@effect/platform";
+import { NodeHttpClient } from "@effect/platform-node";
 import { Data, Effect, Schema } from "effect";
 import { AppConfig } from "../config";
 
@@ -35,25 +37,23 @@ export class NotificationError extends Data.TaggedError("NotificationError")<{
 export class NotifyService extends Effect.Service<NotifyService>()("NotifyService", {
   effect: Effect.gen(function* () {
     const config = yield* AppConfig;
+    const httpClient = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
 
     const sendWebhook = (payload: DiscordWebhookPayload): Effect.Effect<void, NotificationError> =>
-      Effect.tryPromise({
-        try: async () => {
-          const res = await fetch(config.deployment.discordWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          if (!res.ok) {
-            throw new Error(`Discord API error: ${res.status}`);
-          }
-        },
-        catch: (e) =>
-          new NotificationError({
-            message: e instanceof Error ? e.message : "Failed to send Discord notification",
-            cause: e,
-          }),
-      });
+      httpClient
+        .post(config.deployment.discordWebhookUrl, {
+          body: HttpBody.unsafeJson(payload),
+        })
+        .pipe(
+          Effect.asVoid,
+          Effect.mapError(
+            (e) =>
+              new NotificationError({
+                message: e.message,
+                cause: e,
+              })
+          )
+        );
 
     return {
       notifyError: (error: unknown): Effect.Effect<void, NotificationError> =>
@@ -123,5 +123,5 @@ export class NotifyService extends Effect.Service<NotifyService>()("NotifyServic
         }),
     };
   }),
-  dependencies: [],
+  dependencies: [NodeHttpClient.layerUndici],
 }) {}

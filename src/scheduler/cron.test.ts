@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Cron, Effect, Layer } from "effect";
+import { Cron, Effect, Fiber, Layer, TestClock } from "effect";
 import { vi } from "vitest";
 
 // Hoisted mock for google-auth-library (must be before imports that use it)
@@ -238,6 +238,107 @@ describe("Cron Scheduler", () => {
 
         expect(result.added).toBe(0);
         expect(result.errors).toBe(1);
+      })
+    );
+
+    it.effect("should retry on transient failures with syncWithRetry", () =>
+      Effect.gen(function* () {
+        let callCount = 0;
+
+        // Mock SyncService that fails twice then succeeds
+        const mockSyncService = new SyncService({
+          run: Effect.suspend(() => {
+            callCount++;
+            if (callCount < 3) {
+              return Effect.fail(
+                new StateError({ message: `Transient error attempt ${callCount}` })
+              ) as typeof SyncService.prototype.run;
+            }
+            return Effect.succeed({
+              added: 1,
+              skipped: 0,
+              errors: 0,
+              duration: 100,
+              details: [],
+              failedRows: [],
+            });
+          }),
+        });
+
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () => Effect.succeed(undefined as undefined),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        // Fork the syncWithRetry effect and use TestClock to advance time
+        const fiber = yield* Effect.fork(cronService.syncWithRetry);
+
+        // Advance time past the retry delays (2s + 4s = 6s for 2 retries)
+        yield* TestClock.adjust("10 seconds");
+
+        const result = yield* Fiber.join(fiber);
+
+        expect(callCount).toBe(3); // 2 failures + 1 success
+        expect(result.added).toBe(1);
+        expect(result.errors).toBe(0);
+      })
+    );
+
+    it.effect("should fail after exhausting retries with syncWithRetry", () =>
+      Effect.gen(function* () {
+        let callCount = 0;
+
+        // Mock SyncService that always fails
+        const mockSyncService = new SyncService({
+          run: Effect.suspend(() => {
+            callCount++;
+            return Effect.fail(
+              new StateError({ message: `Persistent error attempt ${callCount}` })
+            ) as typeof SyncService.prototype.run;
+          }),
+        });
+
+        let notifyErrorCalled = false;
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () => Effect.succeed(undefined as undefined),
+          notifyError: () =>
+            Effect.sync(() => {
+              notifyErrorCalled = true;
+            }),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        // Fork the syncWithRetry effect and use TestClock to advance time
+        const fiber = yield* Effect.fork(cronService.syncWithRetry);
+
+        // Advance time past all retry delays (2s + 4s + 8s = 14s for 3 retries)
+        yield* TestClock.adjust("20 seconds");
+
+        const result = yield* Fiber.join(fiber);
+
+        expect(callCount).toBe(4); // 1 initial + 3 retries
+        expect(result.added).toBe(0);
+        expect(result.errors).toBe(1);
+        expect(notifyErrorCalled).toBe(true);
       })
     );
   });

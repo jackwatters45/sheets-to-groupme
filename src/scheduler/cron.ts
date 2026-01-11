@@ -93,7 +93,7 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       );
     }).pipe(Effect.interruptible);
 
-    return { syncOnce, runHourly };
+    return { syncOnce, syncWithRetry, runHourly };
   }),
   dependencies: [SyncService.Default, NotifyService.Default],
 }) {}

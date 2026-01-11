@@ -6,11 +6,11 @@ import { AppConfig } from "../config";
 import type { UserContact } from "../core/schema";
 
 // Schema for Google Sheets API response
-const GoogleSheetsResponse = Schema.Struct({
+class GoogleSheetsResponse extends Schema.Class<GoogleSheetsResponse>("GoogleSheetsResponse")({
   values: Schema.optional(
     Schema.mutable(Schema.Array(Schema.mutable(Schema.Array(Schema.String))))
   ),
-});
+}) {}
 
 export type { UserContact };
 

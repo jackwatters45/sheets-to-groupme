@@ -74,13 +74,39 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       Effect.catchAll(handleSyncError("Sync failed"))
     );
 
+    // Network readiness check - polls until network is available
+    const waitForNetwork = Effect.gen(function* () {
+      yield* Console.log("[INFO] Checking network readiness...");
+      const maxAttempts = 30; // 30 attempts * 2s = 60s max wait
+      let attempt = 0;
+
+      while (attempt < maxAttempts) {
+        attempt++;
+        const isReady = yield* Effect.tryPromise({
+          try: () =>
+            fetch("https://www.google.com", {
+              method: "HEAD",
+              signal: AbortSignal.timeout(2000),
+            }).then(() => true),
+          catch: () => false,
+        });
+
+        if (isReady) {
+          yield* Console.log(`[INFO] Network ready after ${attempt * 2}s`);
+          return;
+        }
+
+        yield* Effect.sleep(Duration.seconds(2));
+      }
+
+      yield* Console.warn("[WARN] Network readiness check timed out after 60s, proceeding anyway");
+    });
+
     const runHourly = Effect.gen(function* () {
       yield* Console.log("[INFO] Starting cron scheduler (hourly at :00)");
 
       // Wait for network to be ready before first sync
-      // Fly.io network/DNS can take 15+ seconds to fully initialize
-      yield* Console.log("[INFO] Waiting 15s for network initialization...");
-      yield* Effect.sleep(Duration.seconds(15));
+      yield* waitForNetwork;
 
       // Run once immediately (with retry)
       yield* syncWithRetry;

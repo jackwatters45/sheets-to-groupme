@@ -323,22 +323,18 @@ describe("Cron Scheduler", () => {
         ["John Doe", "john@example.com", "555-1234"],
       ];
 
-      const mockFetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ values: mockValues }),
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* GoogleSheetsService;
-          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
-          expect(result).toEqual(mockValues);
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
+        expect(result).toEqual(mockValues);
+      }).pipe(
+        Effect.provide(
+          createGoogleTestLayer(testConfig, () => ({
+            status: 200,
+            body: { values: mockValues },
+          }))
+        )
+      );
     });
 
     it.effect("should add member to GroupMe", () => {
@@ -355,23 +351,19 @@ describe("Cron Scheduler", () => {
         },
       };
 
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* GroupMeService;
-          const result = yield* service.addMember("test-group-id", member);
-          expect(result.success).toBe(true);
-          expect(result.memberId).toBe("12345");
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createGroupMeTestLayer(testConfig)));
+        const service = yield* GroupMeService;
+        const result = yield* service.addMember("test-group-id", member);
+        expect(result.success).toBe(true);
+        expect(result.memberId).toBe("12345");
+      }).pipe(
+        Effect.provide(
+          createGroupMeTestLayer(testConfig, () => ({
+            status: 200,
+            body: mockResponse,
+          }))
+        )
+      );
     });
 
     it.effect("should parse user contacts from rows", () => {

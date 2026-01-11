@@ -48,67 +48,55 @@ describe("GoogleSheetsService", () => {
         ["John Doe", "john@example.com", "555-1234"],
       ];
 
-      const mockFetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ values: mockValues }),
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* GoogleSheetsService;
-          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
-          expect(result).toEqual(mockValues);
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
+        expect(result).toEqual(mockValues);
+      }).pipe(
+        Effect.provide(
+          createGoogleTestLayer(testConfig, () => ({
+            status: 200,
+            body: { values: mockValues },
+          }))
+        )
+      );
     });
 
     it.effect("should return empty array when no values", () => {
       const testConfig = createTestConfig();
 
-      const mockFetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* GoogleSheetsService;
-          const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
-          expect(result).toEqual([]);
-        } finally {
-          globalThis.fetch = originalFetch;
-        }
-      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
+        const service = yield* GoogleSheetsService;
+        const result = yield* service.fetchRows("test-sheet-id", "Sheet1!A1:C2");
+        expect(result).toEqual([]);
+      }).pipe(
+        Effect.provide(
+          createGoogleTestLayer(testConfig, () => ({
+            status: 200,
+            body: {},
+          }))
+        )
+      );
     });
 
     it.effect("should fail when Sheets API returns error", () => {
       const testConfig = createTestConfig();
 
-      const mockFetch = vi.fn().mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
-
       return Effect.gen(function* () {
-        const originalFetch = globalThis.fetch;
-        try {
-          (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-          const service = yield* GoogleSheetsService;
-          const result = yield* Effect.either(service.fetchRows("test-sheet-id", "Sheet1!A1:C2"));
-          expect(result._tag).toBe("Left");
-          if (result._tag === "Left") {
-            expect(result.left).toBeInstanceOf(GoogleAuthError);
-          }
-        } finally {
-          globalThis.fetch = originalFetch;
+        const service = yield* GoogleSheetsService;
+        const result = yield* Effect.either(service.fetchRows("test-sheet-id", "Sheet1!A1:C2"));
+        expect(result._tag).toBe("Left");
+        if (result._tag === "Left") {
+          expect(result.left).toBeInstanceOf(GoogleAuthError);
         }
-      }).pipe(Effect.provide(createGoogleTestLayer(testConfig)));
+      }).pipe(
+        Effect.provide(
+          createGoogleTestLayer(testConfig, () => ({
+            status: 404,
+            body: { error: "Not found" },
+          }))
+        )
+      );
     });
   });
 

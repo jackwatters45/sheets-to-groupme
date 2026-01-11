@@ -1,7 +1,16 @@
-import { Data, Effect } from "effect";
+import { HttpClient, HttpClientRequest } from "@effect/platform";
+import { NodeHttpClient } from "@effect/platform-node";
+import { Data, Effect, Schema } from "effect";
 import { JWT } from "google-auth-library";
 import { AppConfig } from "../config";
 import type { UserContact } from "../core/schema";
+
+// Schema for Google Sheets API response
+const GoogleSheetsResponse = Schema.Struct({
+  values: Schema.optional(
+    Schema.mutable(Schema.Array(Schema.mutable(Schema.Array(Schema.String))))
+  ),
+});
 
 export type { UserContact };
 
@@ -94,39 +103,36 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
   {
     effect: Effect.gen(function* () {
       const authService = yield* GoogleAuthService;
+      const baseClient = yield* HttpClient.HttpClient;
 
       const fetchRows = (sheetId: string, range: string) =>
         Effect.gen(function* () {
           const accessToken = yield* authService.getAccessToken();
 
-          const response = yield* Effect.tryPromise({
-            try: async () =>
-              fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`, {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  Accept: "application/json",
-                },
-              }),
-            catch: (error) =>
-              new GoogleAuthError({
-                message: error instanceof Error ? error.message : "Request failed",
-                cause: error,
-              }),
-          });
+          const httpClient = baseClient.pipe(
+            HttpClient.filterStatusOk,
+            HttpClient.mapRequest(
+              HttpClientRequest.setHeaders({
+                Authorization: `Bearer ${accessToken}`,
+                Accept: "application/json",
+              })
+            )
+          );
 
-          if (!response.ok) {
-            return yield* Effect.fail(
-              new GoogleAuthError({ message: `Google Sheets API error: ${response.status}` })
-            );
-          }
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`;
+          const response = yield* httpClient.get(url).pipe(
+            Effect.flatMap((res) => res.json),
+            Effect.flatMap(Schema.decodeUnknown(GoogleSheetsResponse)),
+            Effect.mapError(
+              (error) =>
+                new GoogleAuthError({
+                  message: error.message,
+                  cause: error,
+                })
+            )
+          );
 
-          const data = yield* Effect.tryPromise({
-            try: async () => response.json() as Promise<{ values?: string[][] }>,
-            catch: (error) =>
-              new GoogleAuthError({ message: "Failed to parse response", cause: error }),
-          });
-
-          return data.values ?? [];
+          return response.values ?? [];
         });
 
       const parseUserContacts = (
@@ -165,6 +171,6 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
 
       return { fetchRows, parseUserContacts };
     }),
-    dependencies: [GoogleAuthService.Default],
+    dependencies: [GoogleAuthService.Default, NodeHttpClient.layerUndici],
   }
 ) {}

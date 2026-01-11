@@ -26,7 +26,9 @@ export const AppConfig = Config.all({
   google: Config.all({
     sheetId: Config.string("GOOGLE_SHEET_ID"),
     serviceAccountEmail: Config.string("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
-    serviceAccountPrivateKey: Config.string("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"),
+    serviceAccountPrivateKey: Config.string("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").pipe(
+      Config.map((key) => key.replace(/\\n/g, "\n"))
+    ),
     projectId: Config.string("GOOGLE_PROJECT_ID"),
   }),
   groupme: Config.all({

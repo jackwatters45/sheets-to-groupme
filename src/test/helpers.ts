@@ -1,9 +1,63 @@
-import { Layer } from "effect";
+import { HttpClient, HttpClientResponse } from "@effect/platform";
+import { Effect, Layer } from "effect";
 import { NotifyService } from "../error/notify";
-import { GoogleSheetsService } from "../google/client";
+import { GoogleAuthService, GoogleSheetsService } from "../google/client";
 import { GroupMeService } from "../groupme/client";
 import type { ProcessedRow, SyncState } from "../state/store";
 import { type TestConfig, createTestConfigProvider } from "./config";
+
+/**
+ * Mock response configuration for HttpClient tests.
+ */
+export interface MockHttpResponse {
+  status?: number;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+/**
+ * Creates a mock HttpClient that returns configured responses.
+ * The handler function receives the request and returns the mock response.
+ */
+export const createMockHttpClient = (
+  handler: (req: { url: string; method: string; body?: unknown }) => MockHttpResponse
+) =>
+  HttpClient.make((req) =>
+    Effect.sync(() => {
+      // Extract request info
+      const url = req.url;
+      const method = req.method;
+
+      // Get the mock response from handler
+      const mockResponse = handler({ url, method });
+
+      const status = mockResponse.status ?? 200;
+      const body = mockResponse.body;
+      const headers = mockResponse.headers ?? { "Content-Type": "application/json" };
+
+      // Create a Response object
+      const responseBody = body !== undefined ? JSON.stringify(body) : "";
+      const response = new Response(responseBody, {
+        status,
+        headers,
+      });
+
+      return HttpClientResponse.fromWeb(req, response);
+    })
+  );
+
+/**
+ * Creates a mock HttpClient layer from a handler function.
+ */
+export const createMockHttpClientLayer = (
+  handler: (req: { url: string; method: string; body?: unknown }) => MockHttpResponse
+) => Layer.succeed(HttpClient.HttpClient, createMockHttpClient(handler));
+
+/**
+ * Creates a simple mock HttpClient layer that returns a fixed response.
+ */
+export const createSimpleMockHttpClientLayer = (response: MockHttpResponse) =>
+  createMockHttpClientLayer(() => response);
 
 /**
  * Creates a mock SyncState for testing.
@@ -21,25 +75,56 @@ export const createMockState = (
 });
 
 /**
- * Creates a test layer for GoogleSheetsService with the given config.
+ * Creates a test layer for GoogleSheetsService with mock HttpClient.
  */
-export const createGoogleTestLayer = (config: TestConfig) =>
-  GoogleSheetsService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
+export const createGoogleTestLayer = (
+  config: TestConfig,
+  mockHandler?: (req: { url: string; method: string }) => MockHttpResponse
+) => {
+  const configLayer = Layer.setConfigProvider(createTestConfigProvider(config));
+  const httpLayer = mockHandler
+    ? createMockHttpClientLayer(mockHandler)
+    : createSimpleMockHttpClientLayer({ status: 200, body: { values: [] } });
+
+  return GoogleSheetsService.DefaultWithoutDependencies.pipe(
+    Layer.provide(GoogleAuthService.Default),
+    Layer.provide(httpLayer),
+    Layer.provide(configLayer)
   );
+};
 
 /**
- * Creates a test layer for GroupMeService with the given config.
+ * Creates a test layer for GroupMeService with mock HttpClient.
  */
-export const createGroupMeTestLayer = (config: TestConfig) =>
-  GroupMeService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
+export const createGroupMeTestLayer = (
+  config: TestConfig,
+  mockHandler?: (req: { url: string; method: string }) => MockHttpResponse
+) => {
+  const configLayer = Layer.setConfigProvider(createTestConfigProvider(config));
+  const httpLayer = mockHandler
+    ? createMockHttpClientLayer(mockHandler)
+    : createSimpleMockHttpClientLayer({ status: 200, body: {} });
+
+  return GroupMeService.DefaultWithoutDependencies.pipe(
+    Layer.provide(httpLayer),
+    Layer.provide(configLayer)
   );
+};
 
 /**
- * Creates a test layer for NotifyService with the given config.
+ * Creates a test layer for NotifyService with mock HttpClient.
  */
-export const createNotifyTestLayer = (config: TestConfig) =>
-  NotifyService.Default.pipe(
-    Layer.provide(Layer.setConfigProvider(createTestConfigProvider(config)))
+export const createNotifyTestLayer = (
+  config: TestConfig,
+  mockHandler?: (req: { url: string; method: string }) => MockHttpResponse
+) => {
+  const configLayer = Layer.setConfigProvider(createTestConfigProvider(config));
+  const httpLayer = mockHandler
+    ? createMockHttpClientLayer(mockHandler)
+    : createSimpleMockHttpClientLayer({ status: 200, body: {} });
+
+  return NotifyService.DefaultWithoutDependencies.pipe(
+    Layer.provide(httpLayer),
+    Layer.provide(configLayer)
   );
+};

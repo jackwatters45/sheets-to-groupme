@@ -78,8 +78,9 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       yield* Console.log("[INFO] Starting cron scheduler (hourly at :00)");
 
       // Wait for network to be ready before first sync
-      yield* Console.log("[INFO] Waiting 3s for network initialization...");
-      yield* Effect.sleep(Duration.seconds(3));
+      // Fly.io network/DNS can take 15+ seconds to fully initialize
+      yield* Console.log("[INFO] Waiting 15s for network initialization...");
+      yield* Effect.sleep(Duration.seconds(15));
 
       // Run once immediately (with retry)
       yield* syncWithRetry;

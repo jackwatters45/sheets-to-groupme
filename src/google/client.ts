@@ -1,5 +1,4 @@
-import { HttpClient, HttpClientRequest } from "@effect/platform";
-import { NodeHttpClient } from "@effect/platform-node";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform";
 import { Data, Effect, Schema } from "effect";
 import { JWT } from "google-auth-library";
 import { AppConfig } from "../config";
@@ -176,6 +175,6 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
 
       return { fetchRows, parseUserContacts };
     }),
-    dependencies: [GoogleAuthService.Default, NodeHttpClient.layerUndici],
+    dependencies: [GoogleAuthService.Default, FetchHttpClient.layer],
   }
 ) {}

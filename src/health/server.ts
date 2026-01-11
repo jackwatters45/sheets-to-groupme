@@ -86,11 +86,7 @@ export const waitForNetwork = Effect.gen(function* () {
     );
 
     if (isReady) {
-      yield* Console.log(
-        `[INFO] All services reachable after ${attempt * 2}s, waiting 45s for API backends...`
-      );
-      yield* Effect.sleep(Duration.seconds(45));
-      yield* Console.log("[INFO] Network stabilized, proceeding");
+      yield* Console.log(`[INFO] Network ready after ${attempt * 2}s`);
       return;
     }
 

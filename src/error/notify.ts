@@ -1,5 +1,4 @@
-import { HttpBody, HttpClient } from "@effect/platform";
-import { NodeHttpClient } from "@effect/platform-node";
+import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform";
 import { Data, Effect, Schema } from "effect";
 import { AppConfig } from "../config";
 
@@ -123,5 +122,5 @@ export class NotifyService extends Effect.Service<NotifyService>()("NotifyServic
         }),
     };
   }),
-  dependencies: [NodeHttpClient.layerUndici],
+  dependencies: [FetchHttpClient.layer],
 }) {}

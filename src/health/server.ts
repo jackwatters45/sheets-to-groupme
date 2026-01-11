@@ -71,7 +71,9 @@ export const waitForNetwork = Effect.gen(function* () {
     );
 
     if (isReady) {
-      yield* Console.log(`[INFO] Network ready after ${attempt * 2}s`);
+      yield* Console.log(`[INFO] Network ready after ${attempt * 2}s, waiting 10s to stabilize...`);
+      yield* Effect.sleep(Duration.seconds(10));
+      yield* Console.log("[INFO] Network stabilized, proceeding");
       return;
     }
 

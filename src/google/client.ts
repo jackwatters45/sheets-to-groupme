@@ -3,7 +3,7 @@ import { NodeHttpClient } from "@effect/platform-node";
 import { Data, Effect, Schema } from "effect";
 import { JWT } from "google-auth-library";
 import { AppConfig } from "../config";
-import type { UserContact } from "../core/schema";
+import { UserContact } from "../core/schema";
 
 // Schema for Google Sheets API response
 class GoogleSheetsResponse extends Schema.Class<GoogleSheetsResponse>("GoogleSheetsResponse")({
@@ -90,12 +90,17 @@ export const extractUserContacts = (
       const email = row[columnMapping.emailIndex]?.trim();
       const phone = row[columnMapping.phoneIndex]?.trim();
 
-      return {
-        name,
-        ...(email ? { email } : {}),
-        ...(phone ? { phone } : {}),
-      } as UserContact;
-    });
+      return { name, email, phone };
+    })
+    .filter((contact) => contact.name.length > 0)
+    .map(
+      (contact) =>
+        new UserContact({
+          name: contact.name,
+          ...(contact.email ? { email: contact.email } : {}),
+          ...(contact.phone ? { phone: contact.phone } : {}),
+        })
+    );
 };
 
 export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(

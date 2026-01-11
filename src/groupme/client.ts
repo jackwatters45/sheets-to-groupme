@@ -13,12 +13,48 @@ class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
   response: Schema.optional(UserInfo),
 }) {}
 
-class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
+export class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
   user_id: Schema.String,
   nickname: Schema.String,
   email: Schema.optional(Schema.String),
   phone_number: Schema.optional(Schema.String),
 }) {}
+
+/**
+ * Normalize phone number by stripping all non-digit characters
+ */
+export const normalizePhone = (phone: string): string => phone.replace(/\D/g, "");
+
+/**
+ * Check if a contact is already in the group by matching email or phone.
+ * - Email comparison is case-insensitive
+ * - Phone comparison normalizes both to digits only
+ */
+export const isContactInGroup = (
+  contact: { email?: string; phone?: string },
+  members: readonly GroupMember[]
+): boolean => {
+  const contactEmail = contact.email?.toLowerCase();
+  const contactPhone = contact.phone ? normalizePhone(contact.phone) : undefined;
+
+  return members.some((member) => {
+    // Match by email (case-insensitive)
+    if (contactEmail && member.email) {
+      if (member.email.toLowerCase() === contactEmail) {
+        return true;
+      }
+    }
+
+    // Match by phone (normalized digits only)
+    if (contactPhone && member.phone_number) {
+      if (normalizePhone(member.phone_number) === contactPhone) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+};
 
 class GroupResponseData extends Schema.Class<GroupResponseData>("GroupResponseData")({
   members: Schema.optional(Schema.Array(GroupMember)),

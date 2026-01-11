@@ -3,3 +3,8 @@ Started: 2026-01-11T12:50:00+11:00
 Previous: plans/archive/v1.0.0/
 
 --- Session History ---
+
+[groupme-001] COMPLETE
+Summary: Exported GroupMember class and added isContactInGroup/normalizePhone utility functions
+Files: src/groupme/client.ts, biome.json
+Gotchas: Added plans/ to biome ignore to avoid formatting PRD files

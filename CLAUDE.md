@@ -185,13 +185,14 @@ src/
 ├── main.ts           # Entry point
 ├── config.ts         # Environment configuration
 ├── google/           # Google Sheets integration
-│   ├── client.ts     # API client with Layer
-│   └── types.ts      # Type definitions
+│   └── client.ts     # API client with Layer
 ├── groupme/          # GroupMe integration
+│   └── client.ts     # API client
 ├── state/            # Local state management
 ├── scheduler/        # Cron scheduling
-├── core/             # Shared utilities (logger, schemas)
-└── types/            # Shared type definitions
+├── error/            # Error handling and notifications
+├── core/             # Shared utilities (schemas)
+└── sync/             # Sync orchestration
 ```
 
 ### Module Patterns
@@ -220,7 +221,7 @@ const config = Config.all({
 }).pipe(Config.withDefault(defaults));
 ```
 
-Document all required vars in `.env.example`.
+Secrets are managed via Infisical. Run locally with `infisical run -- bun run src/main.ts`.
 
 ### Testing (Vitest + @effect/vitest)
 
@@ -249,17 +250,18 @@ it.effect("should work", () =>
 
 ## Common Patterns
 
-### Fetch with Error Handling
+### HTTP Requests with @effect/platform
+
+Use `@effect/platform` HttpClient (preferred over raw fetch):
 
 ```typescript
+import { HttpClient, HttpClientRequest } from "@effect/platform";
+
 const fetchData = (url: string) =>
-  Effect.tryPromise({
-    try: async () => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
-    catch: (e) => new FetchError(e instanceof Error ? e.message : "Failed"),
+  Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+    const response = yield* client.get(url);
+    return yield* response.json;
   });
 ```
 
@@ -274,5 +276,7 @@ const appConfig = Config.all({
 ## Git Workflow
 
 - Commit per feature: `feat(ID): description`
-- Run `typecheck` and `check` before committing
+- Lefthook runs automatically:
+  - **Pre-commit**: typecheck + `biome check --write` on staged files
+  - **Pre-push**: typecheck, biome check, and tests
 - Keep commits focused and atomic

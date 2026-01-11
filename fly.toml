@@ -1,0 +1,34 @@
+# fly.toml app configuration file generated for sheets-to-groupme on 2026-01-11T11:29:56+11:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'sheets-to-groupme'
+primary_region = 'sjc'
+
+[build]
+
+[env]
+  BUN_ENV = 'production'
+
+[[mounts]]
+  source = 'sheets_data'
+  destination = '/app/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
+  cpus = 1
+  memory_mb = 1024
+
+[[statics]]
+  guest_path = '/app/data'
+  url_prefix = '/data/'

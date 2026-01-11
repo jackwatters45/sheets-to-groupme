@@ -8,6 +8,12 @@ import {
   GroupMeMemberAlreadyExistsError,
   GroupMeService,
   GroupMeUnauthorizedError,
+  GroupMember,
+  isContactInGroup,
+  matchesByEmail,
+  matchesByName,
+  matchesByPhone,
+  normalizePhone,
 } from "./client";
 
 describe("GroupMeService", () => {
@@ -320,6 +326,169 @@ describe("GroupMeService", () => {
     it("should have GroupMeService defined", () => {
       expect(GroupMeService).toBeDefined();
       expect(GroupMeService.Default).toBeDefined();
+    });
+  });
+});
+
+describe("normalizePhone", () => {
+  it("should strip non-digit characters", () => {
+    expect(normalizePhone("+1-555-123-4567")).toBe("15551234567");
+    expect(normalizePhone("(555) 123-4567")).toBe("5551234567");
+    expect(normalizePhone("+44 20 7946 0958")).toBe("442079460958");
+  });
+
+  it("should handle already normalized phones", () => {
+    expect(normalizePhone("15551234567")).toBe("15551234567");
+    expect(normalizePhone("5551234567")).toBe("5551234567");
+  });
+
+  it("should handle empty string", () => {
+    expect(normalizePhone("")).toBe("");
+  });
+
+  it("should handle phones with extensions", () => {
+    expect(normalizePhone("+1-555-123-4567 ext 123")).toBe("15551234567123");
+  });
+
+  it("should handle international formats", () => {
+    expect(normalizePhone("+81-3-1234-5678")).toBe("81312345678");
+    expect(normalizePhone("+49 30 12345678")).toBe("493012345678");
+  });
+});
+
+describe("matchesByName", () => {
+  it("should match case-insensitively", () => {
+    expect(matchesByName("John Doe", "John Doe")).toBe(true);
+    expect(matchesByName("john doe", "JOHN DOE")).toBe(true);
+    expect(matchesByName("JANE", "jane")).toBe(true);
+  });
+
+  it("should not match different names", () => {
+    expect(matchesByName("John", "Jane")).toBe(false);
+    expect(matchesByName("John Doe", "John Smith")).toBe(false);
+  });
+
+  it("should return false for undefined values", () => {
+    expect(matchesByName(undefined, "John")).toBe(false);
+    expect(matchesByName("John", undefined)).toBe(false);
+    expect(matchesByName(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("matchesByEmail", () => {
+  it("should match case-insensitively", () => {
+    expect(matchesByEmail("john@example.com", "john@example.com")).toBe(true);
+    expect(matchesByEmail("JOHN@EXAMPLE.COM", "john@example.com")).toBe(true);
+    expect(matchesByEmail("John@Example.Com", "JOHN@EXAMPLE.COM")).toBe(true);
+  });
+
+  it("should not match different emails", () => {
+    expect(matchesByEmail("john@example.com", "jane@example.com")).toBe(false);
+  });
+
+  it("should return false for undefined values", () => {
+    expect(matchesByEmail(undefined, "john@example.com")).toBe(false);
+    expect(matchesByEmail("john@example.com", undefined)).toBe(false);
+    expect(matchesByEmail(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("matchesByPhone", () => {
+  it("should match normalized phones", () => {
+    expect(matchesByPhone("15551234567", "15551234567")).toBe(true);
+    expect(matchesByPhone("+1-555-123-4567", "15551234567")).toBe(true);
+    expect(matchesByPhone("(555) 123-4567", "+1 555 123 4567")).toBe(false); // different digit count
+  });
+
+  it("should not match different phones", () => {
+    expect(matchesByPhone("15551234567", "15559999999")).toBe(false);
+  });
+
+  it("should return false for undefined values", () => {
+    expect(matchesByPhone(undefined, "15551234567")).toBe(false);
+    expect(matchesByPhone("15551234567", undefined)).toBe(false);
+    expect(matchesByPhone(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("isContactInGroup", () => {
+  const members = [
+    new GroupMember({ user_id: "1", nickname: "John Doe", email: "john@example.com" }),
+    new GroupMember({ user_id: "2", nickname: "Jane Smith", phone_number: "15551234567" }),
+    new GroupMember({ user_id: "3", nickname: "Bob" }),
+  ];
+
+  describe("name matching", () => {
+    it("should match by exact name (case-insensitive)", () => {
+      expect(isContactInGroup({ name: "John Doe" }, members)).toBe(true);
+      expect(isContactInGroup({ name: "john doe" }, members)).toBe(true);
+      expect(isContactInGroup({ name: "JANE SMITH" }, members)).toBe(true);
+    });
+
+    it("should not match partial names", () => {
+      expect(isContactInGroup({ name: "John" }, members)).toBe(false);
+      expect(isContactInGroup({ name: "Jane" }, members)).toBe(false);
+    });
+
+    it("should not match unknown names", () => {
+      expect(isContactInGroup({ name: "Unknown Person" }, members)).toBe(false);
+    });
+  });
+
+  describe("email matching", () => {
+    it("should match by email (case-insensitive)", () => {
+      expect(isContactInGroup({ email: "john@example.com" }, members)).toBe(true);
+      expect(isContactInGroup({ email: "JOHN@EXAMPLE.COM" }, members)).toBe(true);
+    });
+
+    it("should not match unknown emails", () => {
+      expect(isContactInGroup({ email: "unknown@example.com" }, members)).toBe(false);
+    });
+  });
+
+  describe("phone matching", () => {
+    it("should match by normalized phone", () => {
+      expect(isContactInGroup({ phone: "15551234567" }, members)).toBe(true);
+      expect(isContactInGroup({ phone: "+1-555-123-4567" }, members)).toBe(true);
+      expect(isContactInGroup({ phone: "(555) 123-4567" }, members)).toBe(false); // missing country code
+    });
+
+    it("should not match unknown phones", () => {
+      expect(isContactInGroup({ phone: "9999999999" }, members)).toBe(false);
+    });
+  });
+
+  describe("combined matching", () => {
+    it("should match if any field matches", () => {
+      expect(isContactInGroup({ name: "Wrong", email: "john@example.com" }, members)).toBe(true);
+      expect(isContactInGroup({ name: "Jane Smith", email: "wrong@example.com" }, members)).toBe(
+        true
+      );
+    });
+
+    it("should not match if no fields match", () => {
+      expect(
+        isContactInGroup(
+          { name: "Unknown", email: "unknown@example.com", phone: "0000000000" },
+          members
+        )
+      ).toBe(false);
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle empty members array", () => {
+      expect(isContactInGroup({ name: "John Doe" }, [])).toBe(false);
+    });
+
+    it("should handle contact with no matching fields", () => {
+      expect(isContactInGroup({}, members)).toBe(false);
+    });
+
+    it("should handle undefined fields", () => {
+      expect(
+        isContactInGroup({ name: undefined, email: undefined, phone: undefined }, members)
+      ).toBe(false);
     });
   });
 });

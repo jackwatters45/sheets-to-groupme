@@ -26,6 +26,39 @@ export class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
 export const normalizePhone = (phone: string): string => phone.replace(/\D/g, "");
 
 /**
+ * Check if contact name matches member nickname (case-insensitive)
+ */
+export const matchesByName = (
+  contactName: string | undefined,
+  memberNickname: string | undefined
+): boolean => {
+  if (!contactName || !memberNickname) return false;
+  return memberNickname.toLowerCase() === contactName.toLowerCase();
+};
+
+/**
+ * Check if contact email matches member email (case-insensitive)
+ */
+export const matchesByEmail = (
+  contactEmail: string | undefined,
+  memberEmail: string | undefined
+): boolean => {
+  if (!contactEmail || !memberEmail) return false;
+  return memberEmail.toLowerCase() === contactEmail.toLowerCase();
+};
+
+/**
+ * Check if contact phone matches member phone (normalized to digits only)
+ */
+export const matchesByPhone = (
+  contactPhone: string | undefined,
+  memberPhone: string | undefined
+): boolean => {
+  if (!contactPhone || !memberPhone) return false;
+  return normalizePhone(memberPhone) === normalizePhone(contactPhone);
+};
+
+/**
  * Check if a contact is already in the group by matching name, email, or phone.
  * - Name comparison is case-insensitive
  * - Email comparison is case-insensitive
@@ -35,34 +68,12 @@ export const isContactInGroup = (
   contact: { name?: string | undefined; email?: string | undefined; phone?: string | undefined },
   members: readonly GroupMember[]
 ): boolean => {
-  const contactName = contact.name?.toLowerCase();
-  const contactEmail = contact.email?.toLowerCase();
-  const contactPhone = contact.phone ? normalizePhone(contact.phone) : undefined;
-
-  return members.some((member) => {
-    // Match by name/nickname (case-insensitive)
-    if (contactName && member.nickname) {
-      if (member.nickname.toLowerCase() === contactName) {
-        return true;
-      }
-    }
-
-    // Match by email (case-insensitive)
-    if (contactEmail && member.email) {
-      if (member.email.toLowerCase() === contactEmail) {
-        return true;
-      }
-    }
-
-    // Match by phone (normalized digits only)
-    if (contactPhone && member.phone_number) {
-      if (normalizePhone(member.phone_number) === contactPhone) {
-        return true;
-      }
-    }
-
-    return false;
-  });
+  return members.some(
+    (member) =>
+      matchesByName(contact.name, member.nickname) ||
+      matchesByEmail(contact.email, member.email) ||
+      matchesByPhone(contact.phone, member.phone_number)
+  );
 };
 
 class GroupResponseData extends Schema.Class<GroupResponseData>("GroupResponseData")({

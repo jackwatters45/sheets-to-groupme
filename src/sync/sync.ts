@@ -46,6 +46,9 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
         // Check if contact is already in the group
         if (isContactInGroup(contact, context.existingMembers)) {
+          yield* Effect.logDebug(
+            `Skipping ${contact.name}: already in group (matched by name/email/phone)`
+          );
           return {
             existingMembers: context.existingMembers,
             added: context.added,
@@ -82,6 +85,7 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
         // Handle race condition: member added between our check and addMember call
         if (addResult.alreadyExists) {
+          yield* Effect.logDebug(`Skipping ${contact.name}: already exists in GroupMe`);
           return {
             existingMembers: context.existingMembers,
             added: context.added,
@@ -164,9 +168,9 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       // Fetch current group members from GroupMe
       const existingMembers = yield* groupMeService.getMembers(config.groupme.groupId).pipe(
         Effect.catchAll((error) => {
-          return Effect.logWarning(`Failed to fetch members: ${error.message}`).pipe(
-            Effect.map(() => [] as readonly GroupMember[])
-          );
+          return Effect.logError(
+            `Failed to fetch members (may indicate API credential issue): ${error.message}`
+          ).pipe(Effect.map(() => [] as readonly GroupMember[]));
         })
       );
 

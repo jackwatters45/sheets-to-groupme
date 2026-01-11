@@ -4,43 +4,43 @@ import { Data, Effect, Schema } from "effect";
 import { AppConfig } from "../config";
 
 // Schemas for GroupMe API responses
-const UserResponse = Schema.Struct({
-  response: Schema.optional(
-    Schema.Struct({
-      id: Schema.String,
-      name: Schema.String,
-      email: Schema.String,
-    })
-  ),
-});
+class UserInfo extends Schema.Class<UserInfo>("UserInfo")({
+  id: Schema.String,
+  name: Schema.String,
+  email: Schema.String,
+}) {}
 
-const GroupMemberSchema = Schema.Struct({
+class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
+  response: Schema.optional(UserInfo),
+}) {}
+
+class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
   user_id: Schema.String,
   nickname: Schema.String,
   email: Schema.optional(Schema.String),
   phone_number: Schema.optional(Schema.String),
-});
+}) {}
 
-const GroupResponse = Schema.Struct({
-  response: Schema.optional(
-    Schema.Struct({
-      members: Schema.optional(Schema.Array(GroupMemberSchema)),
-    })
-  ),
-});
+class GroupResponseData extends Schema.Class<GroupResponseData>("GroupResponseData")({
+  members: Schema.optional(Schema.Array(GroupMember)),
+}) {}
 
-const AddMemberResultSchema = Schema.Struct({
+class GroupResponse extends Schema.Class<GroupResponse>("GroupResponse")({
+  response: Schema.optional(GroupResponseData),
+}) {}
+
+class AddMemberResultItem extends Schema.Class<AddMemberResultItem>("AddMemberResultItem")({
   member_id: Schema.String,
   user_id: Schema.String,
-});
+}) {}
 
-const AddMemberResponse = Schema.Struct({
-  response: Schema.optional(
-    Schema.Struct({
-      results: Schema.optional(Schema.Array(AddMemberResultSchema)),
-    })
-  ),
-});
+class AddMemberResponseData extends Schema.Class<AddMemberResponseData>("AddMemberResponseData")({
+  results: Schema.optional(Schema.Array(AddMemberResultItem)),
+}) {}
+
+class AddMemberResponse extends Schema.Class<AddMemberResponse>("AddMemberResponse")({
+  response: Schema.optional(AddMemberResponseData),
+}) {}
 
 export interface GroupMeMember {
   nickname: string;

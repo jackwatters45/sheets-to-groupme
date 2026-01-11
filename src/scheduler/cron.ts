@@ -21,58 +21,57 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
     const syncService = yield* SyncService;
     const notifyService = yield* NotifyService;
 
-    const syncOnce = Effect.gen(function* () {
-      yield* Console.log("[INFO] Starting sync job...");
+    // Retry schedule for transient network errors (3 retries with exponential backoff)
+    const retrySchedule = Schedule.exponential(Duration.seconds(2)).pipe(
+      Schedule.intersect(Schedule.recurs(3))
+    );
 
-      const result = yield* syncService.run;
-
-      yield* Console.log(
-        `[INFO] Sync complete: added=${result.added}, skipped=${result.skipped}, errors=${result.errors}, duration=${result.duration}ms`
-      );
-
-      // Send success notification (best-effort, don't crash on failure)
-      yield* notifyService
-        .notifySuccess({
-          added: result.added,
-          skipped: result.skipped,
-          errors: result.errors,
-        })
+    // Shared notification helpers
+    const notifySuccess = (result: { added: number; skipped: number; errors: number }) =>
+      notifyService
+        .notifySuccess(result)
         .pipe(
           Effect.catchAll((error) =>
             Console.error(`[WARN] Failed to send success notification: ${error.message}`)
           )
         );
 
-      return result;
-    }).pipe(
-      Effect.catchAll((error) =>
-        Effect.gen(function* () {
-          yield* Console.error(
-            `[ERROR] Sync failed: ${error instanceof Error ? error.message : String(error)}`
+    const handleSyncError = (errorLabel: string) => (error: unknown) =>
+      Effect.gen(function* () {
+        yield* Console.error(
+          `[ERROR] ${errorLabel}: ${error instanceof Error ? error.message : String(error)}`
+        );
+        yield* notifyService
+          .notifyError(error)
+          .pipe(
+            Effect.catchAll((notifyError) =>
+              Console.error(`[WARN] Failed to send error notification: ${notifyError.message}`)
+            )
           );
+        return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
+      });
 
-          // Try to send error notification (best-effort)
-          yield* notifyService
-            .notifyError(error)
-            .pipe(
-              Effect.catchAll((notifyError) =>
-                Console.error(`[WARN] Failed to send error notification: ${notifyError.message}`)
-              )
-            );
+    // Core sync operation that can fail (for retry purposes)
+    const syncCore = Effect.gen(function* () {
+      yield* Console.log("[INFO] Starting sync job...");
+      const result = yield* syncService.run;
+      yield* Console.log(
+        `[INFO] Sync complete: added=${result.added}, skipped=${result.skipped}, errors=${result.errors}, duration=${result.duration}ms`
+      );
+      return result;
+    });
 
-          return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
-        })
-      )
-    );
-
-    // Retry schedule for transient network errors (3 retries with exponential backoff)
-    const retrySchedule = Schedule.exponential(Duration.seconds(2)).pipe(
-      Schedule.intersect(Schedule.recurs(3))
-    );
-
-    const syncWithRetry = syncOnce.pipe(
+    // Sync with retry on transient failures (used in production)
+    const syncWithRetry = syncCore.pipe(
       Effect.retry(retrySchedule),
-      Effect.catchAll((error) => Console.error(`[ERROR] Sync failed after retries: ${error}`))
+      Effect.tap(notifySuccess),
+      Effect.catchAll(handleSyncError("Sync failed after retries"))
+    );
+
+    // Sync without retry (used in tests)
+    const syncOnce = syncCore.pipe(
+      Effect.tap(notifySuccess),
+      Effect.catchAll(handleSyncError("Sync failed"))
     );
 
     const runHourly = Effect.gen(function* () {
@@ -94,7 +93,7 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       );
     }).pipe(Effect.interruptible);
 
-    return { syncOnce, runHourly };
+    return { syncOnce, syncWithRetry, runHourly };
   }),
   dependencies: [SyncService.Default, NotifyService.Default],
 }) {}

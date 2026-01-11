@@ -345,6 +345,60 @@ describe("SyncService", () => {
       })
     );
 
+    it.effect("should skip contact that already exists in group (by name)", () =>
+      Effect.gen(function* () {
+        const userContacts = [new UserContact({ name: "John Smith" })];
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () => Effect.succeed([["Name"], ["John Smith"]]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        // Return existing member with matching name (case-insensitive)
+        const existingMember = new GroupMember({
+          user_id: "existing789",
+          nickname: "john smith", // lowercase version
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: "67890",
+              userId: "u67890",
+              alreadyExists: false,
+            }),
+          getMembers: () => Effect.succeed([existingMember]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(1);
+        expect(result.errors).toBe(0);
+        expect(result.details[0].status).toBe("skipped");
+        expect(result.details[0].error).toBe("already_in_group");
+      })
+    );
+
     it.effect("should skip member that already exists in GroupMe (race condition)", () =>
       Effect.gen(function* () {
         const userContacts = [new UserContact({ name: "Bob Smith", email: "bob@example.com" })];

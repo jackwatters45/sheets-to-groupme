@@ -82,7 +82,7 @@
     "id": "groupme-002",
     "category": "refactor",
     "description": "Add nickname matching to isContactInGroup",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Update isContactInGroup to also match by nickname/name",
       "Handle case-insensitive name comparison",

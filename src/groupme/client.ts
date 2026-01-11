@@ -26,18 +26,27 @@ export class GroupMember extends Schema.Class<GroupMember>("GroupMember")({
 export const normalizePhone = (phone: string): string => phone.replace(/\D/g, "");
 
 /**
- * Check if a contact is already in the group by matching email or phone.
+ * Check if a contact is already in the group by matching name, email, or phone.
+ * - Name comparison is case-insensitive
  * - Email comparison is case-insensitive
  * - Phone comparison normalizes both to digits only
  */
 export const isContactInGroup = (
-  contact: { email?: string | undefined; phone?: string | undefined },
+  contact: { name?: string | undefined; email?: string | undefined; phone?: string | undefined },
   members: readonly GroupMember[]
 ): boolean => {
+  const contactName = contact.name?.toLowerCase();
   const contactEmail = contact.email?.toLowerCase();
   const contactPhone = contact.phone ? normalizePhone(contact.phone) : undefined;
 
   return members.some((member) => {
+    // Match by name/nickname (case-insensitive)
+    if (contactName && member.nickname) {
+      if (member.nickname.toLowerCase() === contactName) {
+        return true;
+      }
+    }
+
     // Match by email (case-insensitive)
     if (contactEmail && member.email) {
       if (member.email.toLowerCase() === contactEmail) {

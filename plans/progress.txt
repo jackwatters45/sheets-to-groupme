@@ -34,3 +34,7 @@ Gotchas: Also removed generateRowId function from sync.ts
 
 [test-002] COMPLETE
 Summary: All CI checks pass (typecheck, biome check, vitest)
+
+[groupme-002] COMPLETE
+Summary: Added nickname/name matching to isContactInGroup (case-insensitive)
+Files: src/groupme/client.ts, src/sync/sync.test.ts

@@ -1,5 +1,6 @@
 import { Console, Cron, Duration, Effect, Schedule } from "effect";
 import { NotifyService } from "../error/notify";
+import { waitForNetwork } from "../health/server";
 import { SyncService } from "../sync/sync";
 
 /**
@@ -73,34 +74,6 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       Effect.tap(notifySuccess),
       Effect.catchAll(handleSyncError("Sync failed"))
     );
-
-    // Network readiness check - polls until network is available
-    const waitForNetwork = Effect.gen(function* () {
-      yield* Console.log("[INFO] Checking network readiness...");
-      const maxAttempts = 30; // 30 attempts * 2s = 60s max wait
-      let attempt = 0;
-
-      while (attempt < maxAttempts) {
-        attempt++;
-        const isReady = yield* Effect.tryPromise({
-          try: () =>
-            fetch("https://www.google.com", {
-              method: "HEAD",
-              signal: AbortSignal.timeout(2000),
-            }).then(() => true),
-          catch: () => false,
-        });
-
-        if (isReady) {
-          yield* Console.log(`[INFO] Network ready after ${attempt * 2}s`);
-          return;
-        }
-
-        yield* Effect.sleep(Duration.seconds(2));
-      }
-
-      yield* Console.warn("[WARN] Network readiness check timed out after 60s, proceeding anyway");
-    });
 
     const runHourly = Effect.gen(function* () {
       yield* Console.log("[INFO] Starting cron scheduler (hourly at :00)");

@@ -8,3 +8,13 @@ Previous: plans/archive/v1.0.0/
 Summary: Exported GroupMember class and added isContactInGroup/normalizePhone utility functions
 Files: src/groupme/client.ts, biome.json
 Gotchas: Added plans/ to biome ignore to avoid formatting PRD files
+
+[sync-001] COMPLETE
+Summary: Refactored SyncService to use live GroupMe members instead of file-based state
+Files: src/sync/sync.ts, src/sync/sync.test.ts, src/scheduler/cron.test.ts
+Gotchas:
+- Tests needed StateError replaced with GoogleAuthError
+- Added tests for email and phone matching (case-insensitive, normalized)
+
+[test-001] COMPLETE
+Summary: Updated sync.test.ts for new architecture (done as part of sync-001)

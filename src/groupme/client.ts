@@ -31,7 +31,7 @@ export const normalizePhone = (phone: string): string => phone.replace(/\D/g, ""
  * - Phone comparison normalizes both to digits only
  */
 export const isContactInGroup = (
-  contact: { email?: string; phone?: string },
+  contact: { email?: string | undefined; phone?: string | undefined },
   members: readonly GroupMember[]
 ): boolean => {
   const contactEmail = contact.email?.toLowerCase();

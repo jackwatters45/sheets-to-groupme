@@ -7,14 +7,12 @@ import {
   type UserContact,
 } from "../core/schema";
 import { GoogleSheetsService } from "../google/client";
-import { type GroupMeMember, GroupMeService } from "../groupme/client";
 import {
-  StateService,
-  type SyncState,
-  generateRowId,
-  isDuplicateRow,
-  markRowAsProcessed,
-} from "../state/store";
+  type GroupMeMember,
+  GroupMeService,
+  type GroupMember,
+  isContactInGroup,
+} from "../groupme/client";
 
 export class SyncError extends Data.TaggedError("SyncError")<{
   readonly message: string;
@@ -24,19 +22,25 @@ export class SyncError extends Data.TaggedError("SyncError")<{
 const DEFAULT_RANGE = "A:Z";
 
 interface ProcessingContext {
-  state: SyncState;
+  existingMembers: readonly GroupMember[];
   added: number;
   skipped: number;
   errors: number;
-  failedCount: number;
   details: SyncResultDetail[];
   failedRows: SyncResultFailedRow[];
 }
 
+/**
+ * Generate a simple row identifier from contact data
+ */
+const generateRowId = (contact: UserContact): string => {
+  const parts = [contact.name, contact.email || "", contact.phone || ""];
+  return parts.join("|").slice(0, 64);
+};
+
 export class SyncService extends Effect.Service<SyncService>()("SyncService", {
   effect: Effect.gen(function* () {
     const config = yield* AppConfig;
-    const stateService = yield* StateService;
     const googleSheetsService = yield* GoogleSheetsService;
     const groupMeService = yield* GroupMeService;
 
@@ -46,35 +50,28 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       groupId: string
     ): Effect.Effect<ProcessingContext, never> =>
       Effect.gen(function* () {
-        const row = [contact.name, contact.email || "", contact.phone || ""];
-        const rowId = yield* Effect.promise(() => generateRowId(row));
+        const rowId = generateRowId(contact);
         const timestamp = new Date().toISOString();
 
-        if (isDuplicateRow(rowId, context.state)) {
-          const existingRow = context.state.processedRows.get(rowId);
-          const wasSuccessful = existingRow?.success ?? false;
-
-          if (wasSuccessful) {
-            const updatedState = markRowAsProcessed(context.state, rowId, false);
-            return {
-              state: updatedState,
-              added: context.added,
-              skipped: context.skipped + 1,
-              errors: context.errors,
-              failedCount: context.failedCount,
-              details: [
-                ...context.details,
-                new SyncResultDetail({
-                  rowId,
-                  name: contact.name,
-                  status: "skipped",
-                  error: "already_processed",
-                  timestamp,
-                }),
-              ],
-              failedRows: context.failedRows,
-            };
-          }
+        // Check if contact is already in the group
+        if (isContactInGroup(contact, context.existingMembers)) {
+          return {
+            existingMembers: context.existingMembers,
+            added: context.added,
+            skipped: context.skipped + 1,
+            errors: context.errors,
+            details: [
+              ...context.details,
+              new SyncResultDetail({
+                rowId,
+                name: contact.name,
+                status: "skipped",
+                error: "already_in_group",
+                timestamp,
+              }),
+            ],
+            failedRows: context.failedRows,
+          };
         }
 
         const member: GroupMeMember = {
@@ -87,20 +84,19 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           Effect.catchAll((error) =>
             Effect.succeed({
               success: false,
-              alreadyExists: false,
+              alreadyExists: error._tag === "GroupMeMemberAlreadyExistsError",
               errorMessage: error.message,
             })
           )
         );
 
+        // Handle race condition: member added between our check and addMember call
         if (addResult.alreadyExists) {
-          const updatedState = markRowAsProcessed(context.state, rowId, false);
           return {
-            state: updatedState,
+            existingMembers: context.existingMembers,
             added: context.added,
             skipped: context.skipped + 1,
             errors: context.errors,
-            failedCount: context.failedCount,
             details: [
               ...context.details,
               new SyncResultDetail({
@@ -121,11 +117,10 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           yield* Effect.logError(`Failed to add member ${contact.name}: ${errorMessage}`);
 
           return {
-            state: context.state,
+            existingMembers: context.existingMembers,
             added: context.added,
             skipped: context.skipped,
             errors: context.errors + 1,
-            failedCount: context.failedCount + 1,
             details: [
               ...context.details,
               new SyncResultDetail({
@@ -148,13 +143,11 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           };
         }
 
-        const updatedState = markRowAsProcessed(context.state, rowId, true);
         return {
-          state: updatedState,
+          existingMembers: context.existingMembers,
           added: context.added + 1,
           skipped: context.skipped,
           errors: context.errors,
-          failedCount: context.failedCount,
           details: [
             ...context.details,
             new SyncResultDetail({
@@ -181,6 +174,17 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
       const startTime = Date.now();
 
       yield* Effect.logInfo("Starting sync...");
+
+      // Fetch current group members from GroupMe
+      const existingMembers = yield* groupMeService.getMembers(config.groupme.groupId).pipe(
+        Effect.catchAll((error) => {
+          return Effect.logWarning(`Failed to fetch members: ${error.message}`).pipe(
+            Effect.map(() => [] as readonly GroupMember[])
+          );
+        })
+      );
+
+      yield* Effect.logInfo(`Found ${existingMembers.length} existing members in group`);
 
       const rows = yield* googleSheetsService.fetchRows(config.google.sheetId, DEFAULT_RANGE);
 
@@ -218,14 +222,11 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
       yield* Effect.logInfo(`Found ${userContacts.length} user contacts`);
 
-      const currentState = yield* stateService.load;
-
       const initialContext: ProcessingContext = {
-        state: currentState,
+        existingMembers,
         added: 0,
         skipped: 0,
         errors: 0,
-        failedCount: 0,
         details: [],
         failedRows: [],
       };
@@ -235,8 +236,6 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
         initialContext,
         config.groupme.groupId
       );
-
-      yield* stateService.save(finalContext.state);
 
       const duration = Date.now() - startTime;
       yield* Effect.logInfo(
@@ -255,5 +254,5 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
     return { run };
   }),
-  dependencies: [StateService.Default, GoogleSheetsService.Default, GroupMeService.Default],
+  dependencies: [GoogleSheetsService.Default, GroupMeService.Default],
 }) {}

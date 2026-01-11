@@ -26,7 +26,7 @@
     "id": "sync-001",
     "category": "refactor",
     "description": "Refactor SyncService to fetch live GroupMe members instead of file state",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Call groupMeService.getMembers() at start of sync",
       "Use isContactInGroup to check if contact already exists",
@@ -61,7 +61,7 @@
     "id": "test-001",
     "category": "test",
     "description": "Update sync.test.ts for new architecture",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Remove StateService mocks",
       "Add mock for getMembers returning existing members",

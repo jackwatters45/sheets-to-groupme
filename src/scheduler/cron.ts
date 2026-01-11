@@ -21,37 +21,42 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
     const syncService = yield* SyncService;
     const notifyService = yield* NotifyService;
 
-    const syncOnce = Effect.gen(function* () {
+    // Retry schedule for transient network errors (3 retries with exponential backoff)
+    const retrySchedule = Schedule.exponential(Duration.seconds(2)).pipe(
+      Schedule.intersect(Schedule.recurs(3))
+    );
+
+    // Core sync operation that can fail (for retry purposes)
+    const syncCore = Effect.gen(function* () {
       yield* Console.log("[INFO] Starting sync job...");
-
       const result = yield* syncService.run;
-
       yield* Console.log(
         `[INFO] Sync complete: added=${result.added}, skipped=${result.skipped}, errors=${result.errors}, duration=${result.duration}ms`
       );
-
-      // Send success notification (best-effort, don't crash on failure)
-      yield* notifyService
-        .notifySuccess({
-          added: result.added,
-          skipped: result.skipped,
-          errors: result.errors,
-        })
-        .pipe(
-          Effect.catchAll((error) =>
-            Console.error(`[WARN] Failed to send success notification: ${error.message}`)
-          )
-        );
-
       return result;
-    }).pipe(
+    });
+
+    // Sync with retry on transient failures
+    const syncWithRetry = syncCore.pipe(
+      Effect.retry(retrySchedule),
+      Effect.tap((result) =>
+        notifyService
+          .notifySuccess({
+            added: result.added,
+            skipped: result.skipped,
+            errors: result.errors,
+          })
+          .pipe(
+            Effect.catchAll((error) =>
+              Console.error(`[WARN] Failed to send success notification: ${error.message}`)
+            )
+          )
+      ),
       Effect.catchAll((error) =>
         Effect.gen(function* () {
           yield* Console.error(
-            `[ERROR] Sync failed: ${error instanceof Error ? error.message : String(error)}`
+            `[ERROR] Sync failed after retries: ${error instanceof Error ? error.message : String(error)}`
           );
-
-          // Try to send error notification (best-effort)
           yield* notifyService
             .notifyError(error)
             .pipe(
@@ -59,20 +64,41 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
                 Console.error(`[WARN] Failed to send error notification: ${notifyError.message}`)
               )
             );
-
           return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
         })
       )
     );
 
-    // Retry schedule for transient network errors (3 retries with exponential backoff)
-    const retrySchedule = Schedule.exponential(Duration.seconds(2)).pipe(
-      Schedule.intersect(Schedule.recurs(3))
-    );
-
-    const syncWithRetry = syncOnce.pipe(
-      Effect.retry(retrySchedule),
-      Effect.catchAll((error) => Console.error(`[ERROR] Sync failed after retries: ${error}`))
+    // Expose syncOnce for testing (same as syncWithRetry but without retry for unit tests)
+    const syncOnce = syncCore.pipe(
+      Effect.tap((result) =>
+        notifyService
+          .notifySuccess({
+            added: result.added,
+            skipped: result.skipped,
+            errors: result.errors,
+          })
+          .pipe(
+            Effect.catchAll((error) =>
+              Console.error(`[WARN] Failed to send success notification: ${error.message}`)
+            )
+          )
+      ),
+      Effect.catchAll((error) =>
+        Effect.gen(function* () {
+          yield* Console.error(
+            `[ERROR] Sync failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+          yield* notifyService
+            .notifyError(error)
+            .pipe(
+              Effect.catchAll((notifyError) =>
+                Console.error(`[WARN] Failed to send error notification: ${notifyError.message}`)
+              )
+            );
+          return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
+        })
+      )
     );
 
     const runHourly = Effect.gen(function* () {

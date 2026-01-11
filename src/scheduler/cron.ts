@@ -1,4 +1,4 @@
-import { Console, Cron, Effect, Schedule } from "effect";
+import { Console, Cron, Duration, Effect, Schedule } from "effect";
 import { NotifyService } from "../error/notify";
 import { SyncService } from "../sync/sync";
 
@@ -65,14 +65,28 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       )
     );
 
+    // Retry schedule for transient network errors (3 retries with exponential backoff)
+    const retrySchedule = Schedule.exponential(Duration.seconds(2)).pipe(
+      Schedule.intersect(Schedule.recurs(3))
+    );
+
+    const syncWithRetry = syncOnce.pipe(
+      Effect.retry(retrySchedule),
+      Effect.catchAll((error) => Console.error(`[ERROR] Sync failed after retries: ${error}`))
+    );
+
     const runHourly = Effect.gen(function* () {
       yield* Console.log("[INFO] Starting cron scheduler (hourly at :00)");
 
-      // Run once immediately
-      yield* syncOnce;
+      // Wait for network to be ready before first sync
+      yield* Console.log("[INFO] Waiting 3s for network initialization...");
+      yield* Effect.sleep(Duration.seconds(3));
+
+      // Run once immediately (with retry)
+      yield* syncWithRetry;
 
       // Then repeat on the hourly schedule
-      yield* syncOnce.pipe(
+      yield* syncWithRetry.pipe(
         Effect.repeat(hourlySchedule),
         Effect.catchAllCause((cause) =>
           Console.error(`[ERROR] Scheduler stopped unexpectedly: ${cause}`)

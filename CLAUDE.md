@@ -277,6 +277,6 @@ const appConfig = Config.all({
 
 - Commit per feature: `feat(ID): description`
 - Lefthook runs automatically:
-  - **Pre-commit**: `biome check --write` on staged files
+  - **Pre-commit**: typecheck + `biome check --write` on staged files
   - **Pre-push**: typecheck, biome check, and tests
 - Keep commits focused and atomic

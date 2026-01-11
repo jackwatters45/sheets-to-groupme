@@ -4,7 +4,7 @@ FROM oven/bun:1-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 
 # Install dependencies
 RUN bun install --frozen-lockfile
@@ -19,21 +19,17 @@ WORKDIR /app
 
 # Copy package files and dependencies from builder
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/bun.lockb ./
+COPY --from=builder /app/bun.lock ./
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copy source code
 COPY --from=builder /app/src ./src
 
-# Create non-root user for security
-RUN addgroup -g 1000 -S appgroup && \
-    adduser -S appuser -u 1000 -G appgroup
-
-# Create data directory for state persistence
-RUN mkdir -p /app/data && chown -R appuser:appgroup /app
+# Create data directory for state persistence (bun image already has non-root user)
+RUN mkdir -p /app/data && chown -R bun:bun /app
 
 # Switch to non-root user
-USER appuser
+USER bun
 
 # Expose the port (Fly.io uses PORT env var)
 EXPOSE 8080

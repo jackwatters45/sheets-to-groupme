@@ -22,14 +22,29 @@ export class ReadinessError extends Data.TaggedError("ReadinessError")<{
 const healthHandler = HttpServerResponse.json({ status: "ok" });
 
 /**
- * GET /ready - Readiness check (verifies outbound connectivity)
+ * GET /ready - Readiness check (verifies outbound connectivity to all services)
  */
 const readyHandler = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
+
+  // Check Google Sheets API
   yield* client.head("https://sheets.googleapis.com").pipe(
     Effect.timeout(Duration.seconds(5)),
     Effect.mapError(() => new ReadinessError({ message: "Google Sheets API unreachable" }))
   );
+
+  // Check GroupMe API
+  yield* client.head("https://api.groupme.com").pipe(
+    Effect.timeout(Duration.seconds(5)),
+    Effect.mapError(() => new ReadinessError({ message: "GroupMe API unreachable" }))
+  );
+
+  // Check Discord API
+  yield* client.head("https://discord.com").pipe(
+    Effect.timeout(Duration.seconds(5)),
+    Effect.mapError(() => new ReadinessError({ message: "Discord API unreachable" }))
+  );
+
   return yield* HttpServerResponse.json({ status: "ready" });
 }).pipe(
   Effect.catchAll((error) =>
@@ -71,9 +86,7 @@ export const waitForNetwork = Effect.gen(function* () {
     );
 
     if (isReady) {
-      yield* Console.log(`[INFO] Network ready after ${attempt * 2}s, waiting 30s to stabilize...`);
-      yield* Effect.sleep(Duration.seconds(30));
-      yield* Console.log("[INFO] Network stabilized, proceeding");
+      yield* Console.log(`[INFO] Network ready after ${attempt * 2}s`);
       return;
     }
 

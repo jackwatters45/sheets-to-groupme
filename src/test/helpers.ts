@@ -3,7 +3,6 @@ import { Effect, Layer } from "effect";
 import { NotifyService } from "../error/notify";
 import { GoogleAuthService, GoogleSheetsService } from "../google/client";
 import { GroupMeService } from "../groupme/client";
-import type { ProcessedRow, SyncState } from "../state/store";
 import { type TestConfig, createTestConfigProvider } from "./config";
 
 /**
@@ -110,21 +109,6 @@ export const createMockHttpClientLayer = (
  */
 export const createSimpleMockHttpClientLayer = (response: MockHttpResponse) =>
   createMockHttpClientLayer(() => response);
-
-/**
- * Creates a mock SyncState for testing.
- *
- * @param lastRun - The last run timestamp (null if never run)
- * @param processedRows - Map or Record of processed rows
- */
-export const createMockState = (
-  lastRun: string | null = null,
-  processedRows?: Map<string, ProcessedRow> | Record<string, ProcessedRow>
-): SyncState => ({
-  lastRun,
-  processedRows:
-    processedRows instanceof Map ? processedRows : new Map(Object.entries(processedRows || {})),
-});
 
 /**
  * Creates a test layer for GoogleSheetsService with mock HttpClient.

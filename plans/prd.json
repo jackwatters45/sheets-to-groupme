@@ -39,7 +39,7 @@
     "id": "cleanup-001",
     "category": "cleanup",
     "description": "Remove state module entirely",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Delete src/state/store.ts",
       "Delete src/state/store.test.ts",

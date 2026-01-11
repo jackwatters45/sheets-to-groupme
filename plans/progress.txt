@@ -18,3 +18,7 @@ Gotchas:
 
 [test-001] COMPLETE
 Summary: Updated sync.test.ts for new architecture (done as part of sync-001)
+
+[cleanup-001] COMPLETE
+Summary: Removed state module entirely
+Files: src/state/store.ts (deleted), src/state/store.test.ts (deleted), src/test/helpers.ts (removed createMockState)

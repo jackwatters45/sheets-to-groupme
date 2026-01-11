@@ -50,7 +50,7 @@
     "id": "cleanup-002",
     "category": "cleanup",
     "description": "Remove volume mount from fly.toml and data dir from Dockerfile",
-    "passes": false,
+    "passes": true,
     "steps": [
       "Remove [[mounts]] section from fly.toml",
       "Remove [[statics]] section from fly.toml",

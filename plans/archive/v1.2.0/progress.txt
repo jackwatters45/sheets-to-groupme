@@ -1,0 +1,39 @@
+Ralph Progress Log
+Started: 2026-01-11T17:23:00+11:00
+Previous: plans/archive/v1.1.0/
+
+--- Session History ---
+
+2026-01-12: PRD created from GitHub issues
+- Pulled 4 open issues from GitHub (#21, #22, #23, #24)
+- Excluded #22 (docs task) per user request - blocked on external action
+- Created 4 features from remaining 3 issues:
+  * notify-001 (P1): Reduce Discord notification noise - GitHub #23
+  * change-001 (P1): Add change detection to skip unchanged sheets - GitHub #21
+  * name-001 (P2): Support First/Last Name columns - GitHub #24
+  * name-002 (P2): Handle name parsing edge cases - GitHub #24
+
+notify-001 COMPLETE
+Summary: Added conditional notification logic - skip Discord notifications when added=0 AND errors=0
+Files: src/scheduler/cron.ts, src/scheduler/cron.test.ts
+Gotchas: None - straightforward change to notifySuccess helper
+
+change-001 COMPLETE
+Summary: Added in-memory hash-based change detection to skip sync when sheet data is unchanged
+Files: src/sync/sync.ts, src/sync/sync.test.ts
+Gotchas: Used node:crypto instead of Bun.CryptoHasher since vitest runs in Node.js context
+
+name-001 COMPLETE
+Summary: Added COLUMN_FIRST_NAME and COLUMN_LAST_NAME env vars with combineName utility
+Files: src/config.ts, src/google/client.ts, src/google/client.test.ts, src/sync/sync.ts, src/test/config.ts
+Gotchas: Needed to update ColumnIndices interface and test helpers for new structure
+
+name-002 COMPLETE
+Summary: Edge cases handled in combineName function (whitespace, empty names)
+Notes: Implemented as part of name-001 - combineName handles all edge cases
+
+---
+Archived: 2026-01-12T11:50:00+11:00
+Version: v1.2.0
+Features: 4/4 passing
+

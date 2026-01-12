@@ -160,6 +160,140 @@ describe("Cron Scheduler", () => {
       })
     );
 
+    it.effect("should skip notification when added=0 and errors=0", () =>
+      Effect.gen(function* () {
+        let notifySuccessCalled = false;
+
+        // Mock SyncService that returns no changes (added=0, errors=0)
+        const mockSyncService = new SyncService({
+          run: Effect.succeed({
+            added: 0,
+            skipped: 5,
+            errors: 0,
+            duration: 100,
+            details: [],
+            failedRows: [],
+          }),
+        });
+
+        // Mock NotifyService that tracks if notifySuccess is called
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () =>
+            Effect.sync(() => {
+              notifySuccessCalled = true;
+            }),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        const result = yield* cronService.syncOnce;
+
+        // Should complete successfully with no additions
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(5);
+        expect(result.errors).toBe(0);
+
+        // Should NOT have called notifySuccess (no changes)
+        expect(notifySuccessCalled).toBe(false);
+      })
+    );
+
+    it.effect("should send notification when added > 0", () =>
+      Effect.gen(function* () {
+        let notifySuccessCalled = false;
+
+        // Mock SyncService that returns new additions
+        const mockSyncService = new SyncService({
+          run: Effect.succeed({
+            added: 3,
+            skipped: 2,
+            errors: 0,
+            duration: 100,
+            details: [],
+            failedRows: [],
+          }),
+        });
+
+        // Mock NotifyService that tracks if notifySuccess is called
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () =>
+            Effect.sync(() => {
+              notifySuccessCalled = true;
+            }),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        const result = yield* cronService.syncOnce;
+
+        expect(result.added).toBe(3);
+        // Should have called notifySuccess (new additions)
+        expect(notifySuccessCalled).toBe(true);
+      })
+    );
+
+    it.effect("should send notification when errors > 0 even if added=0", () =>
+      Effect.gen(function* () {
+        let notifySuccessCalled = false;
+
+        // Mock SyncService that returns errors but no additions
+        const mockSyncService = new SyncService({
+          run: Effect.succeed({
+            added: 0,
+            skipped: 3,
+            errors: 2,
+            duration: 100,
+            details: [],
+            failedRows: [],
+          }),
+        });
+
+        // Mock NotifyService that tracks if notifySuccess is called
+        const mockNotifyService = new NotifyService({
+          notifySuccess: () =>
+            Effect.sync(() => {
+              notifySuccessCalled = true;
+            }),
+          notifyError: () => Effect.succeed(undefined as undefined),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(SyncService, mockSyncService),
+          Layer.succeed(NotifyService, mockNotifyService)
+        );
+
+        const cronService = yield* Effect.provide(
+          CronService,
+          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+        );
+
+        const result = yield* cronService.syncOnce;
+
+        expect(result.added).toBe(0);
+        expect(result.errors).toBe(2);
+        // Should have called notifySuccess (errors occurred)
+        expect(notifySuccessCalled).toBe(true);
+      })
+    );
+
     it.effect("should continue despite notification failure", () =>
       Effect.gen(function* () {
         let syncRan = false;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@effect/vitest";
+import { beforeEach, describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 
 import {
@@ -10,9 +10,49 @@ import {
 import { GoogleSheetsService } from "../google/client";
 import { GroupMeApiError, GroupMeService, GroupMember } from "../groupme/client";
 import { createTestConfig, createTestConfigProvider } from "../test/config";
-import { SyncError, SyncService } from "./sync";
+import { SyncError, SyncService, computeSheetHash, resetSheetHash } from "./sync";
+
+describe("computeSheetHash", () => {
+  it("should compute consistent hash for same data", () => {
+    const rows = [
+      ["Name", "Email"],
+      ["John", "john@example.com"],
+    ];
+    const hash1 = computeSheetHash(rows);
+    const hash2 = computeSheetHash(rows);
+    expect(hash1).toBe(hash2);
+  });
+
+  it("should produce different hash for different data", () => {
+    const rows1 = [["Name"], ["John"]];
+    const rows2 = [["Name"], ["Jane"]];
+    const hash1 = computeSheetHash(rows1);
+    const hash2 = computeSheetHash(rows2);
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it("should produce same hash regardless of row order", () => {
+    const rows1 = [["Name"], ["Alice"], ["Bob"]];
+    const rows2 = [["Name"], ["Bob"], ["Alice"]];
+    const hash1 = computeSheetHash(rows1);
+    const hash2 = computeSheetHash(rows2);
+    expect(hash1).toBe(hash2);
+  });
+
+  it("should handle empty rows", () => {
+    const hash = computeSheetHash([]);
+    expect(hash).toBeDefined();
+    expect(typeof hash).toBe("string");
+    expect(hash.length).toBe(64); // SHA-256 hex string length
+  });
+});
 
 describe("SyncService", () => {
+  // Reset the stored hash before each test to ensure isolation
+  beforeEach(() => {
+    resetSheetHash();
+  });
+
   describe("run - empty data", () => {
     const testConfig = createTestConfig();
     const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(testConfig));
@@ -159,6 +199,144 @@ describe("SyncService", () => {
       expect(SyncService).toBeDefined();
       expect(SyncService.Default).toBeDefined();
     });
+  });
+
+  describe("change detection", () => {
+    const testConfig = createTestConfig();
+    const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(testConfig));
+
+    it.effect("should skip sync on second run with unchanged data", () =>
+      Effect.gen(function* () {
+        const rows = [
+          ["Name", "Email", "Phone"],
+          ["John Doe", "john@example.com", "+15551234567"],
+        ];
+        const userContacts = [
+          new UserContact({ name: "John Doe", email: "john@example.com", phone: "+15551234567" }),
+        ];
+
+        let addMemberCallCount = 0;
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () => Effect.succeed(rows),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.sync(() => {
+              addMemberCallCount++;
+              return {
+                success: true,
+                memberId: "12345",
+                userId: "u12345",
+                alreadyExists: false,
+              };
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        // First run should add the member
+        const result1 = yield* syncService.run;
+        expect(result1.added).toBe(1);
+        expect(addMemberCallCount).toBe(1);
+
+        // Second run with same data should skip (no changes detected)
+        const result2 = yield* syncService.run;
+        expect(result2.added).toBe(0);
+        expect(result2.skipped).toBe(0);
+        expect(result2.errors).toBe(0);
+        // addMember should NOT be called again
+        expect(addMemberCallCount).toBe(1);
+      })
+    );
+
+    it.effect("should proceed with sync when data changes", () =>
+      Effect.gen(function* () {
+        let currentRows = [
+          ["Name", "Email"],
+          ["John", "john@example.com"],
+        ];
+        let currentContacts = [new UserContact({ name: "John", email: "john@example.com" })];
+        let addMemberCallCount = 0;
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () => Effect.succeed(currentRows),
+          parseUserContacts: () => Effect.succeed(currentContacts),
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.sync(() => {
+              addMemberCallCount++;
+              return {
+                success: true,
+                memberId: `m${addMemberCallCount}`,
+                userId: `u${addMemberCallCount}`,
+                alreadyExists: false,
+              };
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        // First run
+        const result1 = yield* syncService.run;
+        expect(result1.added).toBe(1);
+        expect(addMemberCallCount).toBe(1);
+
+        // Change the data
+        currentRows = [
+          ["Name", "Email"],
+          ["John", "john@example.com"],
+          ["Jane", "jane@example.com"],
+        ];
+        currentContacts = [
+          new UserContact({ name: "John", email: "john@example.com" }),
+          new UserContact({ name: "Jane", email: "jane@example.com" }),
+        ];
+
+        // Second run should detect change and proceed
+        const result2 = yield* syncService.run;
+        expect(result2.added).toBe(2);
+        expect(addMemberCallCount).toBe(3); // 1 from first run + 2 from second run
+      })
+    );
   });
 
   describe("processContact with mocked services", () => {

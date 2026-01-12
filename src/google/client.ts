@@ -56,38 +56,82 @@ export class GoogleAuthService extends Effect.Service<GoogleAuthService>()("Goog
   dependencies: [],
 }) {}
 
+export interface ColumnMapping {
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  phone: string;
+}
+
+export interface ColumnIndices {
+  nameIndex: number;
+  firstNameIndex: number;
+  lastNameIndex: number;
+  emailIndex: number;
+  phoneIndex: number;
+  useSeparateNames: boolean;
+}
+
 // Pure utility functions (no Effect needed)
 export const findColumnIndices = (
   headers: string[],
-  columnMapping: {
-    name: string;
-    email: string;
-    phone: string;
-  }
-): { nameIndex: number; emailIndex: number; phoneIndex: number } => {
-  const nameIndex = headers.findIndex(
-    (h) => h.trim().toLowerCase() === columnMapping.name.toLowerCase()
-  );
-  const emailIndex = headers.findIndex(
-    (h) => h.trim().toLowerCase() === columnMapping.email.toLowerCase()
-  );
-  const phoneIndex = headers.findIndex(
-    (h) => h.trim().toLowerCase() === columnMapping.phone.toLowerCase()
-  );
+  columnMapping: ColumnMapping
+): ColumnIndices => {
+  const findIndex = (columnName: string | undefined) =>
+    columnName ? headers.findIndex((h) => h.trim().toLowerCase() === columnName.toLowerCase()) : -1;
 
-  return { nameIndex, emailIndex, phoneIndex };
+  const nameIndex = findIndex(columnMapping.name);
+  const firstNameIndex = findIndex(columnMapping.firstName);
+  const lastNameIndex = findIndex(columnMapping.lastName);
+  const emailIndex = findIndex(columnMapping.email);
+  const phoneIndex = findIndex(columnMapping.phone);
+
+  // Use separate names if firstName column is configured and found
+  const useSeparateNames = !!columnMapping.firstName && firstNameIndex !== -1;
+
+  return { nameIndex, firstNameIndex, lastNameIndex, emailIndex, phoneIndex, useSeparateNames };
+};
+
+/**
+ * Combine first and last name into a full name.
+ * Handles edge cases: empty last name, empty first name, whitespace.
+ */
+export const combineName = (firstName: string, lastName: string): string => {
+  const first = firstName.trim();
+  const last = lastName.trim();
+
+  if (first && last) {
+    return `${first} ${last}`;
+  }
+  if (first) {
+    return first;
+  }
+  if (last) {
+    return last;
+  }
+  return "";
 };
 
 export const extractUserContacts = (
   rows: string[][],
-  columnMapping: { nameIndex: number; emailIndex: number; phoneIndex: number }
+  columnIndices: ColumnIndices
 ): UserContact[] => {
   return rows
     .filter((row) => row.length > 0)
     .map((row) => {
-      const name = row[columnMapping.nameIndex]?.trim() ?? "";
-      const email = row[columnMapping.emailIndex]?.trim();
-      const phone = row[columnMapping.phoneIndex]?.trim();
+      let name: string;
+
+      if (columnIndices.useSeparateNames) {
+        const firstName = row[columnIndices.firstNameIndex]?.trim() ?? "";
+        const lastName = row[columnIndices.lastNameIndex]?.trim() ?? "";
+        name = combineName(firstName, lastName);
+      } else {
+        name = row[columnIndices.nameIndex]?.trim() ?? "";
+      }
+
+      const email = row[columnIndices.emailIndex]?.trim();
+      const phone = row[columnIndices.phoneIndex]?.trim();
 
       return { name, email, phone };
     })
@@ -141,11 +185,7 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
 
       const parseUserContacts = (
         rows: readonly string[][],
-        columnMapping: {
-          name: string;
-          email: string;
-          phone: string;
-        }
+        columnMapping: ColumnMapping
       ): Effect.Effect<UserContact[], ColumnMappingError> => {
         if (rows.length === 0) {
           return Effect.succeed([]);
@@ -154,12 +194,25 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
         const headers = rows[0];
         const dataRows = rows.slice(1);
 
-        const { nameIndex, emailIndex, phoneIndex } = findColumnIndices(headers, columnMapping);
+        const columnIndices = findColumnIndices(headers, columnMapping);
 
         const missingColumns: string[] = [];
-        if (nameIndex === -1) missingColumns.push(columnMapping.name);
-        if (emailIndex === -1) missingColumns.push(columnMapping.email);
-        if (phoneIndex === -1) missingColumns.push(columnMapping.phone);
+
+        // If using separate first/last name columns, check those; otherwise check single name column
+        if (columnIndices.useSeparateNames) {
+          // Only firstName is required when using separate names
+          if (columnIndices.firstNameIndex === -1 && columnMapping.firstName) {
+            missingColumns.push(columnMapping.firstName);
+          }
+          // lastName is optional - don't require it
+        } else {
+          // Single name column mode
+          if (columnIndices.nameIndex === -1) {
+            missingColumns.push(columnMapping.name);
+          }
+        }
+
+        // Email and phone are optional - don't fail if they're missing
 
         if (missingColumns.length > 0) {
           return Effect.fail(
@@ -170,7 +223,7 @@ export class GoogleSheetsService extends Effect.Service<GoogleSheetsService>()(
           );
         }
 
-        return Effect.succeed(extractUserContacts(dataRows, { nameIndex, emailIndex, phoneIndex }));
+        return Effect.succeed(extractUserContacts(dataRows, columnIndices));
       };
 
       return { fetchRows, parseUserContacts };

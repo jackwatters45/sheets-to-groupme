@@ -27,15 +27,21 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
       Schedule.intersect(Schedule.recurs(3))
     );
 
-    // Shared notification helpers
-    const notifySuccess = (result: { added: number; skipped: number; errors: number }) =>
-      notifyService
+    // Shared notification helpers - only notify on errors or new additions
+    const notifySuccess = (result: { added: number; skipped: number; errors: number }) => {
+      // Skip notification when nothing changed (no additions and no errors)
+      if (result.added === 0 && result.errors === 0) {
+        return Console.log("[INFO] Skipping notification: no changes or errors");
+      }
+
+      return notifyService
         .notifySuccess(result)
         .pipe(
           Effect.catchAll((error) =>
             Console.error(`[WARN] Failed to send success notification: ${error.message}`)
           )
         );
+    };
 
     const handleSyncError = (errorLabel: string) => (error: unknown) =>
       Effect.gen(function* () {

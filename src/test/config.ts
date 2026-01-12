@@ -16,6 +16,8 @@ export interface TestConfig {
   };
   sync: {
     columnName: string;
+    columnFirstName: string;
+    columnLastName: string;
     columnEmail: string;
     columnPhone: string;
   };
@@ -39,6 +41,8 @@ export const createTestConfigProvider = (config: TestConfig) =>
       ["GROUPME_GROUP_ID", config.groupme.groupId],
       ["GROUPME_ACCESS_TOKEN", config.groupme.accessToken],
       ["COLUMN_NAME", config.sync.columnName],
+      ["COLUMN_FIRST_NAME", config.sync.columnFirstName],
+      ["COLUMN_LAST_NAME", config.sync.columnLastName],
       ["COLUMN_EMAIL", config.sync.columnEmail],
       ["COLUMN_PHONE", config.sync.columnPhone],
       ["FLY_REGION", config.deployment.flyRegion],
@@ -62,6 +66,8 @@ export const createTestConfig = (): TestConfig => ({
   },
   sync: {
     columnName: "Name",
+    columnFirstName: "",
+    columnLastName: "",
     columnEmail: "Email",
     columnPhone: "Phone",
   },

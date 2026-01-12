@@ -18,3 +18,8 @@ Summary: Added conditional notification logic - skip Discord notifications when 
 Files: src/scheduler/cron.ts, src/scheduler/cron.test.ts
 Gotchas: None - straightforward change to notifySuccess helper
 
+change-001 COMPLETE
+Summary: Added in-memory hash-based change detection to skip sync when sheet data is unchanged
+Files: src/sync/sync.ts, src/sync/sync.test.ts
+Gotchas: Used node:crypto instead of Bun.CryptoHasher since vitest runs in Node.js context
+

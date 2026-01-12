@@ -17,7 +17,7 @@
     "id": "change-001",
     "category": "optimization",
     "description": "Skip sync when Google Sheet data is unchanged (in-memory hash comparison)",
-    "passes": false,
+    "passes": true,
     "github_issue": 21,
     "priority": "P1",
     "steps": [

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Array as Arr, Data, Effect } from "effect";
 import { AppConfig } from "../config";
 import {
@@ -20,6 +21,28 @@ export class SyncError extends Data.TaggedError("SyncError")<{
 }> {}
 
 const DEFAULT_RANGE = "A:Z";
+
+// In-memory storage for change detection
+let lastSheetHash: string | null = null;
+
+/**
+ * Compute a SHA-256 hash of sheet rows for change detection.
+ * Rows are sorted to ensure consistent hashing regardless of row order.
+ */
+export const computeSheetHash = (rows: string[][]): string => {
+  // Sort rows for consistent hashing (by joining each row)
+  const sortedRows = [...rows].sort((a, b) => a.join(",").localeCompare(b.join(",")));
+  const data = JSON.stringify(sortedRows);
+  const hash = createHash("sha256").update(data).digest("hex");
+  return hash;
+};
+
+/**
+ * Reset the stored hash (useful for testing).
+ */
+export const resetSheetHash = (): void => {
+  lastSheetHash = null;
+};
 
 interface ProcessingContext {
   existingMembers: readonly GroupMember[];
@@ -192,6 +215,22 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           failedRows: [],
         });
       }
+
+      // Change detection: compute hash and compare with stored hash
+      const currentHash = computeSheetHash(rows);
+      if (lastSheetHash !== null && currentHash === lastSheetHash) {
+        yield* Effect.logInfo("No changes detected in sheet data, skipping sync");
+        return new SyncResult({
+          added: 0,
+          skipped: 0,
+          errors: 0,
+          duration: Date.now() - startTime,
+          details: [],
+          failedRows: [],
+        });
+      }
+      // Update stored hash for next comparison
+      lastSheetHash = currentHash;
 
       const columnMapping = {
         name: config.sync.columnName,

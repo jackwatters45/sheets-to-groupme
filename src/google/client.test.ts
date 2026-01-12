@@ -12,12 +12,43 @@ vi.mock("google-auth-library", () => ({
 import { createTestConfig } from "../test/config";
 import { createGoogleTestLayer } from "../test/helpers";
 import {
+  type ColumnIndices,
   ColumnMappingError,
   GoogleAuthError,
   GoogleSheetsService,
+  combineName,
   extractUserContacts,
   findColumnIndices,
 } from "./client";
+
+// Helper to create ColumnIndices for tests using single name column
+const createSingleNameIndices = (
+  nameIndex: number,
+  emailIndex: number,
+  phoneIndex: number
+): ColumnIndices => ({
+  nameIndex,
+  firstNameIndex: -1,
+  lastNameIndex: -1,
+  emailIndex,
+  phoneIndex,
+  useSeparateNames: false,
+});
+
+// Helper to create ColumnIndices for tests using separate first/last name columns
+const createSeparateNameIndices = (
+  firstNameIndex: number,
+  lastNameIndex: number,
+  emailIndex: number,
+  phoneIndex: number
+): ColumnIndices => ({
+  nameIndex: -1,
+  firstNameIndex,
+  lastNameIndex,
+  emailIndex,
+  phoneIndex,
+  useSeparateNames: true,
+});
 
 describe("GoogleSheetsService", () => {
   describe("unit tests", () => {
@@ -182,9 +213,9 @@ describe("GoogleSheetsService", () => {
         ["John Doe", "john@example.com", "555-1234"],
         ["Jane Doe", "jane@example.com", "555-5678"],
       ];
-      const mapping = { nameIndex: 0, emailIndex: 1, phoneIndex: 2 };
+      const indices = createSingleNameIndices(0, 1, 2);
 
-      const result = extractUserContacts(rows, mapping);
+      const result = extractUserContacts(rows, indices);
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ name: "John Doe", email: "john@example.com", phone: "555-1234" });
@@ -197,18 +228,18 @@ describe("GoogleSheetsService", () => {
         [],
         ["Jane Doe", "jane@example.com", "555-5678"],
       ];
-      const mapping = { nameIndex: 0, emailIndex: 1, phoneIndex: 2 };
+      const indices = createSingleNameIndices(0, 1, 2);
 
-      const result = extractUserContacts(rows, mapping);
+      const result = extractUserContacts(rows, indices);
 
       expect(result).toHaveLength(2);
     });
 
     it("should handle missing optional fields", () => {
       const rows = [["John Doe"], ["Jane Doe", "jane@example.com"]];
-      const mapping = { nameIndex: 0, emailIndex: 1, phoneIndex: 2 };
+      const indices = createSingleNameIndices(0, 1, 2);
 
-      const result = extractUserContacts(rows, mapping);
+      const result = extractUserContacts(rows, indices);
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ name: "John Doe" });
@@ -217,18 +248,18 @@ describe("GoogleSheetsService", () => {
 
     it("should trim whitespace from values", () => {
       const rows = [["  John Doe  ", "  john@example.com  ", "  555-1234  "]];
-      const mapping = { nameIndex: 0, emailIndex: 1, phoneIndex: 2 };
+      const indices = createSingleNameIndices(0, 1, 2);
 
-      const result = extractUserContacts(rows, mapping);
+      const result = extractUserContacts(rows, indices);
 
       expect(result[0]).toEqual({ name: "John Doe", email: "john@example.com", phone: "555-1234" });
     });
 
     it("should handle empty optional fields", () => {
       const rows = [["John Doe", "", "+1234567890"]];
-      const mapping = { nameIndex: 0, emailIndex: 1, phoneIndex: 2 };
+      const indices = createSingleNameIndices(0, 1, 2);
 
-      const result = extractUserContacts(rows, mapping);
+      const result = extractUserContacts(rows, indices);
 
       expect(result[0]).toEqual({ name: "John Doe", phone: "+1234567890" });
       expect(result[0].email).toBeUndefined();
@@ -236,11 +267,88 @@ describe("GoogleSheetsService", () => {
 
     it("should return empty array for no data rows", () => {
       const rows: string[][] = [];
-      const mapping = { nameIndex: 0, emailIndex: 1, phoneIndex: 2 };
+      const indices = createSingleNameIndices(0, 1, 2);
 
-      const result = extractUserContacts(rows, mapping);
+      const result = extractUserContacts(rows, indices);
 
       expect(result).toHaveLength(0);
+    });
+
+    it("should combine first and last name when using separate columns", () => {
+      const rows = [
+        ["John", "Doe", "john@example.com", "555-1234"],
+        ["Jane", "Smith", "jane@example.com", "555-5678"],
+      ];
+      const indices = createSeparateNameIndices(0, 1, 2, 3);
+
+      const result = extractUserContacts(rows, indices);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].name).toBe("John Doe");
+      expect(result[1].name).toBe("Jane Smith");
+    });
+
+    it("should handle missing last name in separate columns mode", () => {
+      const rows = [["John", "", "john@example.com", "555-1234"]];
+      const indices = createSeparateNameIndices(0, 1, 2, 3);
+
+      const result = extractUserContacts(rows, indices);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe("John");
+    });
+
+    it("should handle missing first name in separate columns mode", () => {
+      const rows = [["", "Doe", "john@example.com", "555-1234"]];
+      const indices = createSeparateNameIndices(0, 1, 2, 3);
+
+      const result = extractUserContacts(rows, indices);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe("Doe");
+    });
+
+    it("should filter out rows with no name in separate columns mode", () => {
+      const rows = [
+        ["John", "Doe", "john@example.com", "555-1234"],
+        ["", "", "empty@example.com", "555-0000"],
+        ["Jane", "Smith", "jane@example.com", "555-5678"],
+      ];
+      const indices = createSeparateNameIndices(0, 1, 2, 3);
+
+      const result = extractUserContacts(rows, indices);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].name).toBe("John Doe");
+      expect(result[1].name).toBe("Jane Smith");
+    });
+  });
+
+  describe("combineName", () => {
+    it("should combine first and last name", () => {
+      expect(combineName("John", "Doe")).toBe("John Doe");
+    });
+
+    it("should return first name only when last name is empty", () => {
+      expect(combineName("John", "")).toBe("John");
+    });
+
+    it("should return last name only when first name is empty", () => {
+      expect(combineName("", "Doe")).toBe("Doe");
+    });
+
+    it("should return empty string when both are empty", () => {
+      expect(combineName("", "")).toBe("");
+    });
+
+    it("should trim whitespace", () => {
+      expect(combineName("  John  ", "  Doe  ")).toBe("John Doe");
+    });
+
+    it("should handle whitespace-only values", () => {
+      expect(combineName("John", "   ")).toBe("John");
+      expect(combineName("   ", "Doe")).toBe("Doe");
+      expect(combineName("   ", "   ")).toBe("");
     });
   });
 

@@ -23,3 +23,12 @@ Summary: Added in-memory hash-based change detection to skip sync when sheet dat
 Files: src/sync/sync.ts, src/sync/sync.test.ts
 Gotchas: Used node:crypto instead of Bun.CryptoHasher since vitest runs in Node.js context
 
+name-001 COMPLETE
+Summary: Added COLUMN_FIRST_NAME and COLUMN_LAST_NAME env vars with combineName utility
+Files: src/config.ts, src/google/client.ts, src/google/client.test.ts, src/sync/sync.ts, src/test/config.ts
+Gotchas: Needed to update ColumnIndices interface and test helpers for new structure
+
+name-002 COMPLETE
+Summary: Edge cases handled in combineName function (whitespace, empty names)
+Notes: Implemented as part of name-001 - combineName handles all edge cases
+

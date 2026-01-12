@@ -13,6 +13,8 @@ export interface AppConfig {
   };
   sync: {
     columnName: string;
+    columnFirstName: string;
+    columnLastName: string;
     columnEmail: string;
     columnPhone: string;
   };
@@ -37,6 +39,8 @@ export const AppConfig = Config.all({
   }),
   sync: Config.all({
     columnName: Config.string("COLUMN_NAME").pipe(Config.withDefault("Name")),
+    columnFirstName: Config.string("COLUMN_FIRST_NAME").pipe(Config.withDefault("")),
+    columnLastName: Config.string("COLUMN_LAST_NAME").pipe(Config.withDefault("")),
     columnEmail: Config.string("COLUMN_EMAIL").pipe(Config.withDefault("Email")),
     columnPhone: Config.string("COLUMN_PHONE").pipe(Config.withDefault("Phone")),
   }),

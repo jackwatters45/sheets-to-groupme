@@ -33,7 +33,7 @@
     "id": "name-001",
     "category": "feature",
     "description": "Support separate First Name and Last Name columns via configurable env vars",
-    "passes": false,
+    "passes": true,
     "github_issue": 24,
     "priority": "P2",
     "steps": [
@@ -48,7 +48,7 @@
     "id": "name-002",
     "category": "feature",
     "description": "Handle edge cases in name parsing (whitespace, empty last name)",
-    "passes": false,
+    "passes": true,
     "github_issue": 24,
     "priority": "P2",
     "steps": [
@@ -57,6 +57,7 @@
       "If first name is empty but last name exists, use last name only",
       "Ensure combined name passes NonEmptyTrimmedString validation",
       "Add unit tests for all edge cases"
-    ]
+    ],
+    "notes": "Implemented as part of name-001 via combineName function"
   }
 ]

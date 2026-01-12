@@ -234,6 +234,8 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
 
       const columnMapping = {
         name: config.sync.columnName,
+        ...(config.sync.columnFirstName ? { firstName: config.sync.columnFirstName } : {}),
+        ...(config.sync.columnLastName ? { lastName: config.sync.columnLastName } : {}),
         email: config.sync.columnEmail,
         phone: config.sync.columnPhone,
       };

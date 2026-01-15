@@ -25,6 +25,9 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy source code
 COPY --from=builder /app/src ./src
 
+# Copy exclusion list (if it exists)
+COPY --from=builder /app/sync-exclude.json ./sync-exclude.json
+
 # Switch to non-root user (bun image already has non-root user)
 USER bun
 

@@ -1,4 +1,5 @@
 import { Console, Cron, Duration, Effect, Schedule } from "effect";
+import { AppConfig } from "../config";
 import { NotifyService } from "../error/notify";
 import { waitForNetwork } from "../health/server";
 import { SyncService } from "../sync/sync";
@@ -19,6 +20,7 @@ const hourlySchedule = Schedule.cron(hourlyCron);
  */
 export class CronService extends Effect.Service<CronService>()("CronService", {
   effect: Effect.gen(function* () {
+    const config = yield* AppConfig;
     const syncService = yield* SyncService;
     const notifyService = yield* NotifyService;
 
@@ -29,6 +31,11 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
 
     // Shared notification helpers - only notify on errors or new additions
     const notifySuccess = (result: { added: number; skipped: number; errors: number }) => {
+      // Skip notifications in dry run mode
+      if (config.sync.dryRun) {
+        return Console.log("[INFO] Skipping notification: dry run mode");
+      }
+
       // Skip notification when nothing changed (no additions and no errors)
       if (result.added === 0 && result.errors === 0) {
         return Console.log("[INFO] Skipping notification: no changes or errors");
@@ -48,13 +55,16 @@ export class CronService extends Effect.Service<CronService>()("CronService", {
         yield* Console.error(
           `[ERROR] ${errorLabel}: ${error instanceof Error ? error.message : String(error)}`
         );
-        yield* notifyService
-          .notifyError(error)
-          .pipe(
-            Effect.catchAll((notifyError) =>
-              Console.error(`[WARN] Failed to send error notification: ${notifyError.message}`)
-            )
-          );
+        // Skip error notification in dry run mode
+        if (!config.sync.dryRun) {
+          yield* notifyService
+            .notifyError(error)
+            .pipe(
+              Effect.catchAll((notifyError) =>
+                Console.error(`[WARN] Failed to send error notification: ${notifyError.message}`)
+              )
+            );
+        }
         return { added: 0, skipped: 0, errors: 1, duration: 0, details: [], failedRows: [] };
       });
 

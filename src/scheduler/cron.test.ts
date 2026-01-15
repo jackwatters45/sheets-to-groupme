@@ -13,9 +13,13 @@ import { NotificationError, NotifyService } from "../error/notify";
 import { ColumnMappingError, GoogleAuthError, GoogleSheetsService } from "../google/client";
 import { type GroupMeMember, GroupMeService } from "../groupme/client";
 import { SyncService } from "../sync/sync";
-import { createTestConfig } from "../test/config";
+import { createTestConfig, createTestConfigProvider } from "../test/config";
 import { createGoogleTestLayer, createGroupMeTestLayer } from "../test/helpers";
 import { CronService, runHourlySync } from "./cron";
+
+// Shared config provider for CronService tests
+const testConfig = createTestConfig();
+const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(testConfig));
 
 describe("Cron Scheduler", () => {
   describe("runHourlySync", () => {
@@ -64,7 +68,10 @@ describe("Cron Scheduler", () => {
         // Run CronService with mocked dependencies
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         const result = yield* cronService.syncOnce;
@@ -104,7 +111,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         // Run syncOnce multiple times
@@ -144,7 +154,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         // syncOnce catches errors and returns error result
@@ -192,7 +205,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         const result = yield* cronService.syncOnce;
@@ -239,7 +255,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         const result = yield* cronService.syncOnce;
@@ -282,7 +301,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         const result = yield* cronService.syncOnce;
@@ -327,7 +349,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         // Should still succeed even if notification fails
@@ -363,7 +388,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         // Should still return error result even if notification fails
@@ -410,7 +438,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         // Fork the syncWithRetry effect and use TestClock to advance time
@@ -457,7 +488,10 @@ describe("Cron Scheduler", () => {
 
         const cronService = yield* Effect.provide(
           CronService,
-          Layer.provide(CronService.DefaultWithoutDependencies, testLayer)
+          Layer.provide(
+            Layer.provide(CronService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
         );
 
         // Fork the syncWithRetry effect and use TestClock to advance time

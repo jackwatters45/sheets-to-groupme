@@ -20,6 +20,7 @@ export interface TestConfig {
     columnLastName: string;
     columnEmail: string;
     columnPhone: string;
+    dryRun: boolean;
   };
   deployment: {
     flyRegion: string;
@@ -45,6 +46,7 @@ export const createTestConfigProvider = (config: TestConfig) =>
       ["COLUMN_LAST_NAME", config.sync.columnLastName],
       ["COLUMN_EMAIL", config.sync.columnEmail],
       ["COLUMN_PHONE", config.sync.columnPhone],
+      ["DRY_RUN", config.sync.dryRun.toString()],
       ["FLY_REGION", config.deployment.flyRegion],
       ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
     ])
@@ -70,6 +72,7 @@ export const createTestConfig = (): TestConfig => ({
     columnLastName: "",
     columnEmail: "Email",
     columnPhone: "Phone",
+    dryRun: false,
   },
   deployment: {
     flyRegion: "sfo",

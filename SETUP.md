@@ -38,6 +38,14 @@ Once complete, send Jack:
 - New contacts are automatically invited to the GroupMe group
 - Already-synced contacts are skipped (no duplicate invites)
 
+### Note on Duplicate Detection
+
+The sync detects existing members by matching name, email, or phone. If someone's sheet info differs from their GroupMe account (e.g., different email or phone number), they may receive duplicate invites.
+
+**Workaround options:**
+1. Add them to the exclusion list (`sync-exclude.json`)
+2. Add a "GroupMe Email" or "GroupMe Phone" column to the sheet for edge cases
+
 ---
 
 ## Questions?

@@ -1,3 +1,4 @@
+import { NodeFileSystem } from "@effect/platform-node";
 import { beforeEach, describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 
@@ -10,7 +11,14 @@ import {
 import { GoogleSheetsService } from "../google/client";
 import { GroupMeApiError, GroupMeService, GroupMember } from "../groupme/client";
 import { createTestConfig, createTestConfigProvider } from "../test/config";
-import { SyncError, SyncService, computeSheetHash, resetSheetHash } from "./sync";
+import {
+  type NormalizedExclusions,
+  SyncError,
+  SyncService,
+  computeSheetHash,
+  isContactExcluded,
+  resetSheetHash,
+} from "./sync";
 
 describe("computeSheetHash", () => {
   it("should compute consistent hash for same data", () => {
@@ -44,6 +52,64 @@ describe("computeSheetHash", () => {
     expect(hash).toBeDefined();
     expect(typeof hash).toBe("string");
     expect(hash.length).toBe(64); // SHA-256 hex string length
+  });
+});
+
+describe("isContactExcluded", () => {
+  // NormalizedExclusions uses Sets with pre-normalized values (lowercase names/emails, digits-only phones)
+  const exclusions: NormalizedExclusions = {
+    names: new Set(["john doe", "jane smith"]),
+    emails: new Set(["excluded@example.com"]),
+    phones: new Set(["15551234567"]),
+  };
+
+  it("should exclude contact by name (case-insensitive)", () => {
+    const contact = new UserContact({ name: "john doe", email: "other@example.com" });
+    expect(isContactExcluded(contact, exclusions)).toBe(true);
+  });
+
+  it("should exclude contact by name (exact case)", () => {
+    const contact = new UserContact({ name: "Jane Smith" });
+    expect(isContactExcluded(contact, exclusions)).toBe(true);
+  });
+
+  it("should exclude contact by email (case-insensitive)", () => {
+    const contact = new UserContact({ name: "Someone Else", email: "EXCLUDED@example.com" });
+    expect(isContactExcluded(contact, exclusions)).toBe(true);
+  });
+
+  it("should exclude contact by phone (normalized)", () => {
+    const contact = new UserContact({ name: "Someone", phone: "+1-555-123-4567" });
+    expect(isContactExcluded(contact, exclusions)).toBe(true);
+  });
+
+  it("should exclude contact by phone (different format)", () => {
+    const contact = new UserContact({ name: "Someone", phone: "1 (555) 123-4567" });
+    expect(isContactExcluded(contact, exclusions)).toBe(true);
+  });
+
+  it("should not exclude contact not in list", () => {
+    const contact = new UserContact({
+      name: "Not Excluded",
+      email: "notexcluded@example.com",
+      phone: "+15559999999",
+    });
+    expect(isContactExcluded(contact, exclusions)).toBe(false);
+  });
+
+  it("should not exclude when exclusion list is empty", () => {
+    const contact = new UserContact({ name: "John Doe" });
+    const emptyExclusions: NormalizedExclusions = {
+      names: new Set(),
+      emails: new Set(),
+      phones: new Set(),
+    };
+    expect(isContactExcluded(contact, emptyExclusions)).toBe(false);
+  });
+
+  it("should handle contact with no email or phone", () => {
+    const contact = new UserContact({ name: "Unknown Person" });
+    expect(isContactExcluded(contact, exclusions)).toBe(false);
   });
 });
 
@@ -82,7 +148,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -127,7 +194,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -243,7 +311,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -304,7 +373,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -384,7 +454,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -452,7 +523,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -509,7 +581,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         // First run: dry run mode
@@ -590,7 +663,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -655,7 +729,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -715,7 +790,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -769,7 +845,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -822,7 +899,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -876,7 +954,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -925,7 +1004,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(
@@ -988,7 +1068,8 @@ describe("SyncService", () => {
 
         const testLayer = Layer.mergeAll(
           Layer.succeed(GoogleSheetsService, mockGoogleService),
-          Layer.succeed(GroupMeService, mockGroupMeService)
+          Layer.succeed(GroupMeService, mockGroupMeService),
+          NodeFileSystem.layer
         );
 
         const syncService = yield* Effect.provide(

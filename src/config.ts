@@ -18,6 +18,7 @@ export interface AppConfig {
     columnEmail: string;
     columnPhone: string;
     dryRun: boolean;
+    exclusionFilePath: string;
   };
   deployment: {
     flyRegion: string;
@@ -47,6 +48,9 @@ export const AppConfig = Config.all({
     dryRun: Config.string("DRY_RUN").pipe(
       Config.map((v) => v.toLowerCase() === "true"),
       Config.withDefault(false)
+    ),
+    exclusionFilePath: Config.string("EXCLUSION_FILE_PATH").pipe(
+      Config.withDefault("sync-exclude.json")
     ),
   }),
   deployment: Config.all({

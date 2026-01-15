@@ -21,6 +21,7 @@ export interface TestConfig {
     columnEmail: string;
     columnPhone: string;
     dryRun: boolean;
+    exclusionFilePath: string;
   };
   deployment: {
     flyRegion: string;
@@ -47,6 +48,7 @@ export const createTestConfigProvider = (config: TestConfig) =>
       ["COLUMN_EMAIL", config.sync.columnEmail],
       ["COLUMN_PHONE", config.sync.columnPhone],
       ["DRY_RUN", config.sync.dryRun.toString()],
+      ["EXCLUSION_FILE_PATH", config.sync.exclusionFilePath],
       ["FLY_REGION", config.deployment.flyRegion],
       ["DISCORD_WEBHOOK_URL", config.deployment.discordWebhookUrl],
     ])
@@ -73,6 +75,7 @@ export const createTestConfig = (): TestConfig => ({
     columnEmail: "Email",
     columnPhone: "Phone",
     dryRun: false,
+    exclusionFilePath: "test-exclude.json",
   },
   deployment: {
     flyRegion: "sfo",

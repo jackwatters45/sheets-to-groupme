@@ -96,6 +96,29 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           ...(contact.phone !== undefined && { phone_number: contact.phone }),
         };
 
+        // Dry run mode: log what would happen without actually adding
+        if (config.sync.dryRun) {
+          yield* Effect.logInfo(
+            `[DRY RUN] Would add: ${contact.name} (${contact.email ?? contact.phone ?? "no contact info"})`
+          );
+          return {
+            existingMembers: context.existingMembers,
+            added: context.added + 1,
+            skipped: context.skipped,
+            errors: context.errors,
+            details: [
+              ...context.details,
+              new SyncResultDetail({
+                name: contact.name,
+                status: "added",
+                error: "dry_run",
+                timestamp,
+              }),
+            ],
+            failedRows: context.failedRows,
+          };
+        }
+
         const addResult = yield* groupMeService.addMember(groupId, member).pipe(
           Effect.catchAll((error) =>
             Effect.succeed({
@@ -186,7 +209,13 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
     const run = Effect.gen(function* () {
       const startTime = Date.now();
 
-      yield* Effect.logInfo("Starting sync...");
+      if (config.sync.dryRun) {
+        yield* Effect.logInfo(
+          "Starting sync in DRY RUN mode (no changes will be made to GroupMe)..."
+        );
+      } else {
+        yield* Effect.logInfo("Starting sync...");
+      }
 
       // Fetch current group members from GroupMe
       // Fail fast if we can't get members - proceeding without them would disable duplicate detection
@@ -229,8 +258,10 @@ export class SyncService extends Effect.Service<SyncService>()("SyncService", {
           failedRows: [],
         });
       }
-      // Update stored hash for next comparison
-      lastSheetHash = currentHash;
+      // Update stored hash for next comparison (skip in dry run so real sync still runs)
+      if (!config.sync.dryRun) {
+        lastSheetHash = currentHash;
+      }
 
       const columnMapping = {
         name: config.sync.columnName,

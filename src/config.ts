@@ -17,6 +17,7 @@ export interface AppConfig {
     columnLastName: string;
     columnEmail: string;
     columnPhone: string;
+    dryRun: boolean;
   };
   deployment: {
     flyRegion: string;
@@ -43,6 +44,10 @@ export const AppConfig = Config.all({
     columnLastName: Config.string("COLUMN_LAST_NAME").pipe(Config.withDefault("")),
     columnEmail: Config.string("COLUMN_EMAIL").pipe(Config.withDefault("Email")),
     columnPhone: Config.string("COLUMN_PHONE").pipe(Config.withDefault("Phone")),
+    dryRun: Config.string("DRY_RUN").pipe(
+      Config.map((v) => v.toLowerCase() === "true"),
+      Config.withDefault(false)
+    ),
   }),
   deployment: Config.all({
     flyRegion: Config.string("FLY_REGION").pipe(Config.withDefault("sfo")),

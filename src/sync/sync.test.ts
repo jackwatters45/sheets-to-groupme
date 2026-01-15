@@ -339,6 +339,219 @@ describe("SyncService", () => {
     );
   });
 
+  describe("dry run mode", () => {
+    it.effect("should not call addMember when dry run is enabled", () =>
+      Effect.gen(function* () {
+        const dryRunConfig = {
+          ...createTestConfig(),
+          sync: { ...createTestConfig().sync, dryRun: true },
+        };
+        const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(dryRunConfig));
+
+        const userContacts = [
+          new UserContact({ name: "John Doe", email: "john@example.com", phone: "+15551234567" }),
+        ];
+
+        let addMemberCallCount = 0;
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Email", "Phone"],
+              ["John Doe", "john@example.com", "+15551234567"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.sync(() => {
+              addMemberCallCount++;
+              return {
+                success: true,
+                memberId: "12345",
+                userId: "u12345",
+                alreadyExists: false,
+              };
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        // Should report as "added" but NOT actually call addMember
+        expect(result.added).toBe(1);
+        expect(result.skipped).toBe(0);
+        expect(result.errors).toBe(0);
+        expect(result.details[0].status).toBe("added");
+        expect(result.details[0].error).toBe("dry_run");
+        expect(addMemberCallCount).toBe(0); // Critical: addMember should NOT be called
+      })
+    );
+
+    it.effect("should still skip duplicates in dry run mode", () =>
+      Effect.gen(function* () {
+        const dryRunConfig = {
+          ...createTestConfig(),
+          sync: { ...createTestConfig().sync, dryRun: true },
+        };
+        const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(dryRunConfig));
+
+        const userContacts = [
+          new UserContact({ name: "Existing User", email: "existing@example.com" }),
+        ];
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () =>
+            Effect.succeed([
+              ["Name", "Email"],
+              ["Existing User", "existing@example.com"],
+            ]),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        const existingMember = new GroupMember({
+          user_id: "existing123",
+          nickname: "Existing User",
+          email: "existing@example.com",
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.succeed({
+              success: true,
+              memberId: "12345",
+              userId: "u12345",
+              alreadyExists: false,
+            }),
+          getMembers: () => Effect.succeed([existingMember]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        const syncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            configProviderLayer
+          )
+        );
+
+        const result = yield* syncService.run;
+
+        // Should still skip duplicates even in dry run mode
+        expect(result.added).toBe(0);
+        expect(result.skipped).toBe(1);
+        expect(result.details[0].status).toBe("skipped");
+        expect(result.details[0].error).toBe("already_in_group");
+      })
+    );
+
+    it.effect("should not update hash so subsequent real sync still runs", () =>
+      Effect.gen(function* () {
+        const rows = [
+          ["Name", "Email"],
+          ["Test User", "test@example.com"],
+        ];
+        const userContacts = [new UserContact({ name: "Test User", email: "test@example.com" })];
+
+        let addMemberCallCount = 0;
+
+        const mockGoogleService = new GoogleSheetsService({
+          fetchRows: () => Effect.succeed(rows),
+          parseUserContacts: () => Effect.succeed(userContacts),
+        });
+
+        const mockGroupMeService = new GroupMeService({
+          validateToken: Effect.succeed({
+            id: "user1",
+            name: "Test User",
+            email: "test@example.com",
+          }),
+          addMember: () =>
+            Effect.sync(() => {
+              addMemberCallCount++;
+              return {
+                success: true,
+                memberId: "12345",
+                userId: "u12345",
+                alreadyExists: false,
+              };
+            }),
+          getMembers: () => Effect.succeed([]),
+        });
+
+        const testLayer = Layer.mergeAll(
+          Layer.succeed(GoogleSheetsService, mockGoogleService),
+          Layer.succeed(GroupMeService, mockGroupMeService)
+        );
+
+        // First run: dry run mode
+        const dryRunConfig = {
+          ...createTestConfig(),
+          sync: { ...createTestConfig().sync, dryRun: true },
+        };
+        const dryRunConfigLayer = Layer.setConfigProvider(createTestConfigProvider(dryRunConfig));
+
+        const dryRunSyncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            dryRunConfigLayer
+          )
+        );
+
+        const dryRunResult = yield* dryRunSyncService.run;
+        expect(dryRunResult.added).toBe(1);
+        expect(addMemberCallCount).toBe(0); // Dry run: no actual add
+
+        // Second run: real mode (same data)
+        const realConfig = createTestConfig();
+        const realConfigLayer = Layer.setConfigProvider(createTestConfigProvider(realConfig));
+
+        const realSyncService = yield* Effect.provide(
+          SyncService,
+          Layer.provide(
+            Layer.provide(SyncService.DefaultWithoutDependencies, testLayer),
+            realConfigLayer
+          )
+        );
+
+        const realResult = yield* realSyncService.run;
+
+        // Should NOT skip due to hash - dry run shouldn't have updated it
+        expect(realResult.added).toBe(1);
+        expect(addMemberCallCount).toBe(1); // Real sync: actually called addMember
+      })
+    );
+  });
+
   describe("processContact with mocked services", () => {
     const testConfig = createTestConfig();
     const configProviderLayer = Layer.setConfigProvider(createTestConfigProvider(testConfig));

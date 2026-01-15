@@ -273,6 +273,41 @@ const appConfig = Config.all({
 });
 ```
 
+## Sync Features
+
+### Dry Run Mode
+
+Set `DRY_RUN=true` to test sync without modifying GroupMe:
+
+```bash
+DRY_RUN=true infisical run -- bun run src/main.ts
+```
+
+- Contacts are not added to GroupMe
+- Discord notifications are skipped
+- Change detection hash is NOT updated (subsequent real sync still runs)
+- Logs show: `[DRY RUN] Would add: Name (email, phone)`
+
+### Exclusion List
+
+Skip contacts already in GroupMe with different identifiers. Create `sync-exclude.json`:
+
+```json
+{
+  "names": ["John Doe"],
+  "emails": ["skip@example.com"],
+  "phones": ["+15551234567"]
+}
+```
+
+- Names/emails: case-insensitive
+- Phones: normalized to digits only
+- File is gitignored; see `sync-exclude.example.json` for template
+
+### Change Detection
+
+Sheet data is hashed (SHA-256) to detect changes. If hash matches previous sync, the sync is skipped. Hash is stored in memory and resets on app restart.
+
 ## Git Workflow
 
 - Commit per feature: `feat(ID): description`

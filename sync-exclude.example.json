@@ -1,5 +1,4 @@
 {
-  "_comment": "Phones are normalized to digits only, so +1-555-123-4567 and 15551234567 are equivalent",
   "names": ["John Doe", "Jane Smith"],
   "emails": ["john@example.com"],
   "phones": ["+15551234567"]

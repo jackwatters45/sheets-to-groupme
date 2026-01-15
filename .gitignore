@@ -37,3 +37,4 @@ coverage
 
 # Data directory (should be mounted on Fly.io)
 data
+sync-exclude.json

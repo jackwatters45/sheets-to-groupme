@@ -19,6 +19,8 @@ jobs:
     concurrency: deploy-group    # optional: ensure only one action runs at a time
     steps:
       - uses: actions/checkout@v4
+      - name: Create exclusion file
+        run: echo '${{ secrets.SYNC_EXCLUDE_JSON }}' > sync-exclude.json
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
         env:

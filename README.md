@@ -68,7 +68,7 @@ Create `sync-exclude.json` in the project root:
 
 - **Names**: Case-insensitive match
 - **Emails**: Case-insensitive match
-- **Phones**: Normalized to digits only (handles various formats)
+- **Phones**: Normalized to digits only - `+1-555-123-4567`, `1 (555) 123-4567`, and `15551234567` all match
 
 See `sync-exclude.example.json` for a template.
 

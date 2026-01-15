@@ -29,6 +29,7 @@ Sync contacts from a Google Sheet to a GroupMe group. Runs on a cron schedule an
 | `COLUMN_EMAIL` | No | Column header for email (default: "Email") |
 | `COLUMN_PHONE` | No | Column header for phone (default: "Phone") |
 | `DRY_RUN` | No | Set to "true" to test without modifying GroupMe |
+| `EXCLUSION_FILE_PATH` | No | Path to exclusion list JSON file (default: "sync-exclude.json") |
 
 ## Column Mapping
 
